@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ASM Recon — Attack Surface Management</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <!-- Phosphor Icons (confirmed working) -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="layout">
+        <!-- Header -->
+        <header class="topbar">
+            <div class="logo">
+                <div class="logo-icon"><i class="ph-fill ph-shield-check"></i></div>
+                <span class="logo-text">ASM Recon</span>
+            </div>
+            <div class="avatar">AD</div>
+        </header>
+
+        <!-- Main -->
+        <main class="main">
+
+            <!-- Scan Bar -->
+            <section class="scan-bar">
+                <h2>Nouvelle analyse</h2>
+                <p class="subtitle">Entrez un nom de domaine pour lancer un scan complet de la surface d'attaque.</p>
+                <form id="scan-form" class="scan-form">
+                    <div class="input-wrap">
+                        <i class="ph ph-magnifying-glass input-icon"></i>
+                        <input type="text" id="target-input" placeholder="ex: scanme.nmap.org" required autocomplete="off">
+                    </div>
+                    <div class="mode-toggle">
+                        <label class="mode-opt">
+                            <input type="radio" name="scan-mode" value="quick" checked>
+                            <span>⚡ Rapide <small>1 000 ports</small></span>
+                        </label>
+                        <label class="mode-opt">
+                            <input type="radio" name="scan-mode" value="full">
+                            <span>🔍 Complet <small>65 535 ports</small></span>
+                        </label>
+                    </div>
+                    <button type="submit" class="btn-scan" id="btn-scan">
+                        <i class="ph ph-radar"></i>
+                        <span>Lancer le scan</span>
+                    </button>
+                </form>
+            </section>
+
+            <!-- Live Progress Panel (hidden by default) -->
+            <section id="progress-panel" class="progress-panel hidden">
+                <div class="progress-header">
+                    <h3><i class="ph ph-spinner-gap spin"></i> Scan en cours : <span id="progress-target"></span></h3>
+                    <span class="progress-badge" id="progress-step-badge">Étape 0/6</span>
+                </div>
+                <div class="progress-bar-track">
+                    <div class="progress-bar-fill" id="progress-bar" style="width: 0%"></div>
+                </div>
+                <div class="progress-details">
+                    <span id="progress-step-name">Initialisation...</span>
+                    <span id="progress-step-detail" class="progress-detail-text"></span>
+                </div>
+                <div class="progress-steps" id="progress-steps"></div>
+            </section>
+
+            <!-- Stats (dernier scan uniquement) -->
+            <section class="stats-row" id="stats-row">
+                <!-- Injected by JS after a scan is selected or latest loaded -->
+            </section>
+
+            <!-- History -->
+            <section class="history-card">
+                <div class="history-header">
+                    <h3>Historique des scans</h3>
+                    <button id="btn-refresh" class="btn-ghost" title="Rafraîchir">
+                        <i class="ph ph-arrows-clockwise" id="refresh-icon"></i>
+                    </button>
+                </div>
+                <table class="scan-table">
+                    <thead>
+                        <tr>
+                            <th>Cible</th>
+                            <th>Date</th>
+                            <th>Mode</th>
+                            <th>Sous-domaines</th>
+                            <th>Ports ouverts</th>
+                            <th>Technologies</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <tr><td colspan="7" class="empty-td">Chargement...</td></tr>
+                    </tbody>
+                </table>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal -->
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-top">
+                <h2 id="modal-title">Rapport</h2>
+                <button id="modal-close" class="btn-ghost"><i class="ph ph-x"></i></button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
