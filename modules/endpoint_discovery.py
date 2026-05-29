@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from config.settings import (
     CRAWL_CONCURRENCY,
     CRAWL_FILTERED_QUERY_PARAMS,
+    CRAWL_HEAD_TIMEOUT,
     CRAWL_PRIORITY_PATH_HINTS,
     CRAWL_STATIC_PATH_PREFIXES,
     CRAWL_TIMEOUT,
@@ -172,7 +173,7 @@ async def tester_endpoint(session, base_url, endpoint, ssl_ctx, semaphore):
             debut = time.perf_counter()
             async with session.head(
                 url_a_tester,
-                timeout=aiohttp.ClientTimeout(total=CRAWL_TIMEOUT),
+                timeout=aiohttp.ClientTimeout(total=CRAWL_HEAD_TIMEOUT),
                 ssl=ssl_ctx,
                 allow_redirects=False,
                 headers=HEADERS_NAVIGATEUR,
@@ -184,7 +185,7 @@ async def tester_endpoint(session, base_url, endpoint, ssl_ctx, semaphore):
                 debut = time.perf_counter()
                 async with session.get(
                     url_a_tester,
-                    timeout=aiohttp.ClientTimeout(total=CRAWL_TIMEOUT),
+                    timeout=aiohttp.ClientTimeout(total=CRAWL_HEAD_TIMEOUT),
                     ssl=ssl_ctx,
                     allow_redirects=False,
                     headers=HEADERS_NAVIGATEUR,
@@ -246,8 +247,8 @@ def extraire_liens_html(html, base_url):
 
 async def recuperer_page_html(session, url, ssl_ctx, semaphore):
     async with semaphore:
+        debut = time.perf_counter()
         try:
-            debut = time.perf_counter()
             async with session.get(
                 url,
                 timeout=aiohttp.ClientTimeout(total=CRAWL_TIMEOUT),
@@ -270,7 +271,11 @@ async def recuperer_page_html(session, url, ssl_ctx, semaphore):
 
         except Exception as e:
             print(f"        [crawler] {url} : {type(e).__name__} {repr(e)}")
-            return None
+            return {
+                "url": url,
+                "error": type(e).__name__,
+                "duration": time.perf_counter() - debut,
+            }
 
 
 async def crawler_endpoints(session, service, ssl_ctx, semaphore):
@@ -289,6 +294,8 @@ async def crawler_endpoints(session, service, ssl_ctx, semaphore):
     queued_urls = set()
     queue = []
     pages_get = 0
+    pages_failed = 0
+    pages_timeout = 0
     cache_used = False
     parse_time = 0.0
     http_time = 0.0
@@ -338,6 +345,11 @@ async def crawler_endpoints(session, service, ssl_ctx, semaphore):
         for (_url, depth), page in zip(batch, pages):
             if page is None:
                 continue
+            if page.get("error"):
+                pages_failed += 1
+                if page["error"] == "TimeoutError":
+                    pages_timeout += 1
+                continue
 
             pages_get += 1
             http_time += page.get("duration", 0.0)
@@ -363,7 +375,8 @@ async def crawler_endpoints(session, service, ssl_ctx, semaphore):
 
     print(
         f"        [PERF][crawler] url={base_url} cache={cache_used} "
-        f"get={pages_get} endpoints={len(endpoints)} visited={len(visited_urls)} "
+        f"get={pages_get} failed={pages_failed} timeouts={pages_timeout} "
+        f"endpoints={len(endpoints)} visited={len(visited_urls)} "
         f"max_queue={max_queue} http={http_time:.2f}s parse={parse_time:.2f}s "
         f"total={time.perf_counter() - debut_total:.2f}s"
     )
