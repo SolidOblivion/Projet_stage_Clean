@@ -48,7 +48,7 @@ CERTSPOTTER_TIMEOUT = float(os.getenv("CERTSPOTTER_TIMEOUT", 10))
 CERTSPOTTER_RETRIES = int(os.getenv("CERTSPOTTER_RETRIES", 2))
 
 MAX_CRAWL_DEPTH = int(os.getenv("MAX_CRAWL_DEPTH", 2))
-MAX_CRAWL_PAGES = int(os.getenv("MAX_CRAWL_PAGES", 12))
+MAX_CRAWL_PAGES = int(os.getenv("MAX_CRAWL_PAGES", 30))
 CRAWL_CONCURRENCY = int(os.getenv("CRAWL_CONCURRENCY", 10))
 CRAWL_TIMEOUT = float(os.getenv("CRAWL_TIMEOUT", TIMEOUT))
 MAX_CRAWL_RESPONSE_SIZE = int(os.getenv("MAX_CRAWL_RESPONSE_SIZE", 500000))
@@ -69,6 +69,12 @@ CRAWL_FILTERED_QUERY_PARAMS = set(
 CRAWL_STATIC_PATH_PREFIXES = _prefixes_url_env(
     "CRAWL_STATIC_PATH_PREFIXES",
     "/_next/static/,/assets/,/fonts/,/images/,/img/,/static/,/css/,/vendor/",
+)
+CRAWL_PRIORITY_PATH_HINTS = tuple(
+    _liste_env(
+        "CRAWL_PRIORITY_PATH_HINTS",
+        "api,graphql,config,debug,internal,routes,schema,admin,dashboard,login",
+    )
 )
 
 SUBDOMAINS_WORDLIST = [

@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from config.settings import (
     CRAWL_CONCURRENCY,
     CRAWL_FILTERED_QUERY_PARAMS,
+    CRAWL_PRIORITY_PATH_HINTS,
     CRAWL_STATIC_PATH_PREFIXES,
     CRAWL_TIMEOUT,
     MAX_CRAWL_DEPTH,
@@ -107,6 +108,41 @@ def classifier_endpoint(path, status_code=None):
         return "admin_panel"
 
     return "page"
+
+
+def score_lien_crawl(url):
+    path = chemin_depuis_url(url).lower()
+    category = classifier_endpoint(path)
+    category_rank = {
+        "sensitive": 0,
+        "api": 1,
+        "admin_panel": 2,
+        "data_file": 3,
+        "forbidden": 4,
+        "redirect": 5,
+        "page": 6,
+    }.get(category, 9)
+    hint_rank = next(
+        (
+            index
+            for index, hint in enumerate(CRAWL_PRIORITY_PATH_HINTS)
+            if hint in path
+        ),
+        len(CRAWL_PRIORITY_PATH_HINTS),
+    )
+    priority_rank = 0 if category == "sensitive" else 1 + hint_rank
+
+    return (
+        priority_rank,
+        category_rank,
+        path.count("/"),
+        len(path),
+        path,
+    )
+
+
+def ordonner_liens_crawl(liens):
+    return sorted(liens, key=score_lien_crawl)
 
 
 def creer_endpoint(url, status_code, source):
@@ -266,7 +302,7 @@ async def crawler_endpoints(session, service, ssl_ctx, semaphore):
         endpoints.append(creer_endpoint(cache_url, cache.get("status_code"), "crawler"))
         liens, duree_parse = extraire_liens_html(cache.get("html", ""), cache_url)
         parse_time += duree_parse
-        for lien in liens:
+        for lien in ordonner_liens_crawl(liens):
             if lien not in queued_urls and lien not in visited_urls:
                 queue.append((lien, 1))
                 queued_urls.add(lien)
@@ -317,7 +353,7 @@ async def crawler_endpoints(session, service, ssl_ctx, semaphore):
 
             liens, duree_parse = extraire_liens_html(page.get("html", ""), page_url)
             parse_time += duree_parse
-            for lien in liens:
+            for lien in ordonner_liens_crawl(liens):
                 if len(visited_urls) + len(queue) >= MAX_CRAWL_PAGES:
                     break
                 if lien in visited_urls or lien in queued_urls:
