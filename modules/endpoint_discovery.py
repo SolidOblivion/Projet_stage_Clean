@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from config.settings import (
     CRAWL_CONCURRENCY,
     CRAWL_FILTERED_QUERY_PARAMS,
+    CRAWL_STATIC_PATH_PREFIXES,
     CRAWL_TIMEOUT,
     MAX_CRAWL_DEPTH,
     MAX_CRAWL_PAGES,
@@ -30,21 +31,6 @@ HEADERS_NAVIGATEUR = {
 }
 
 SOURCE_ORDER = ("fuzzing", "crawler")
-STATIC_PATH_PREFIXES = (
-    "/_next/static/",
-    "/static/",
-    "/assets/",
-    "/dist/",
-    "/build/",
-)
-STATIC_EXTENSIONS = (
-    ".css", ".js", ".mjs", ".map",
-    ".ico", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".avif",
-    ".woff", ".woff2", ".ttf", ".eot",
-    ".mp4", ".webm", ".mp3", ".wav",
-    ".zip", ".gz", ".br", ".rar", ".7z",
-    ".pdf",
-)
 
 
 def creer_contexte_ssl_permissif():
@@ -87,9 +73,7 @@ def normaliser_url(url, base_url=None):
 def est_ressource_statique(url):
     parsed = urlsplit(url)
     path = (parsed.path or "").lower()
-    return path.endswith(STATIC_EXTENSIONS) or any(
-        path.startswith(prefix) for prefix in STATIC_PATH_PREFIXES
-    )
+    return any(path.startswith(prefix) for prefix in CRAWL_STATIC_PATH_PREFIXES)
 
 
 def est_url_interne(url, base_url):

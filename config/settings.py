@@ -14,6 +14,16 @@ def _liste_env(nom, defaut):
     ]
 
 
+def _prefixes_url_env(nom, defaut):
+    prefixes = []
+    for item in _liste_env(nom, defaut):
+        prefix = item if item.startswith("/") else f"/{item}"
+        if not prefix.endswith("/"):
+            prefix = f"{prefix}/"
+        prefixes.append(prefix)
+    return tuple(prefixes)
+
+
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "asm_project")
 
@@ -55,6 +65,10 @@ CRAWL_NOISE_QUERY_PARAMS = _liste_env(
 )
 CRAWL_FILTERED_QUERY_PARAMS = set(
     CRAWL_LANGUAGE_QUERY_PARAMS + CRAWL_NOISE_QUERY_PARAMS
+)
+CRAWL_STATIC_PATH_PREFIXES = _prefixes_url_env(
+    "CRAWL_STATIC_PATH_PREFIXES",
+    "/_next/static/,/assets/,/fonts/,/images/,/img/,/static/,/css/,/vendor/",
 )
 
 SUBDOMAINS_WORDLIST = [
