@@ -27,13 +27,13 @@ def _prefixes_url_env(nom, defaut):
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "asm_project")
 
-TIMEOUT = int(os.getenv("TIMEOUT", 5))
+TIMEOUT = int(os.getenv("TIMEOUT", 3))
 TECH_HTTP_TIMEOUT = float(os.getenv("TECH_HTTP_TIMEOUT", 10))
 MAX_PORTS = int(os.getenv("MAX_PORTS", 1000))
 THREADS = int(os.getenv("THREADS", 10))
 MAX_SUBDOMAINS = int(os.getenv("MAX_SUBDOMAINS", 100))
-PORT_SCANNER_MODE = os.getenv("PORT_SCANNER_MODE", "thread").strip().lower()
-PORT_SCAN_CONCURRENCY = int(os.getenv("PORT_SCAN_CONCURRENCY", 400))
+PORT_SCANNER_MODE = os.getenv("PORT_SCANNER_MODE", "async").strip().lower()
+PORT_SCAN_CONCURRENCY = int(os.getenv("PORT_SCAN_CONCURRENCY", 200))
 
 SUBDOMAIN_DNS_CONCURRENCY = int(os.getenv("SUBDOMAIN_DNS_CONCURRENCY", 200))
 SUBDOMAIN_DNS_TIMEOUT = float(os.getenv("SUBDOMAIN_DNS_TIMEOUT", 2))

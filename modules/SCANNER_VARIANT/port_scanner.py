@@ -56,26 +56,30 @@ def scanner_ip(ip):
 
 
 def scanner_ports(sous_domaines_resolus):
-    print("\nScan des ports...")
+    print("\nScan des ports (avec déduplication des IPs)...")
 
-    resultats = []
-
+    # Étape 1 : collecter toutes les IPs uniques
+    unique_ips = {}
     for entree in sous_domaines_resolus:
-        sous_domaine = entree["subdomain"]
-        ips = entree["ips"]
+        for ip in entree["ips"]:
+            if ip not in unique_ips:
+                unique_ips[ip] = []
+            unique_ips[ip].append(entree["subdomain"])
 
-        print(f"\n  {sous_domaine}")
+    # Étape 2 : scanner chaque IP une seule fois
+    scan_results = {}
+    print(f"Scan de {len(unique_ips)} IPs uniques...")
+    for ip in unique_ips:
+        scan_results[ip] = scanner_ip(ip)
 
-        ports_par_ip = {}
-
-        for ip in ips:
-            ports_ouverts = scanner_ip(ip)
-            ports_par_ip[ip] = ports_ouverts
-
+    # Étape 3 : réassembler les résultats par sous-domaine
+    resultats = []
+    for entree in sous_domaines_resolus:
+        ports_par_ip = {ip: scan_results[ip] for ip in entree["ips"]}
         resultats.append(
             {
-                "subdomain": sous_domaine,
-                "ips": ips,
+                "subdomain": entree["subdomain"],
+                "ips": entree["ips"],
                 "mx": entree["mx"],
                 "ns": entree["ns"],
                 "cname": entree["cname"],
