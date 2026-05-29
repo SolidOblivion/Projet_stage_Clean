@@ -43,6 +43,12 @@ def calculer_summary(sous_domaines):
 
 
 def nettoyer_sous_domaine(sd):
+    services_web = []
+    for service in sd["services_web"]:
+        service_propre = dict(service)
+        service_propre.pop("_html_cache", None)
+        services_web.append(service_propre)
+
     return {
         "subdomain": sd["subdomain"],
         "ips": sd["ips"],
@@ -52,7 +58,7 @@ def nettoyer_sous_domaine(sd):
             "cname": sd["cname"],
         },
         "ports_par_ip": sd["ports_par_ip"],
-        "services_web": sd["services_web"],
+        "services_web": services_web,
     }
 
 

@@ -100,6 +100,10 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
             return
         progress["step_duration"] = round(t.time() - debut, 1)
         progress["details"] = f"{len(sous_domaines)} sous-domaines"
+        print(
+            f"[PERF][pipeline] step=subdomains duree={progress['step_duration']}s "
+            f"count={len(sous_domaines)}"
+        )
 
         # Étape 2 : DNS
         progress["current_step"] = 2
@@ -112,6 +116,10 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
             progress["error"] = "Aucun sous-domaine résolu"
             return
         progress["step_duration"] = round(t.time() - debut, 1)
+        print(
+            f"[PERF][pipeline] step=dns duree={progress['step_duration']}s "
+            f"count={len(sous_domaines_resolus)}"
+        )
         progress["details"] = f"{len(sous_domaines_resolus)} résolus"
 
         # Étape 3 : Ports
@@ -127,6 +135,10 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
             for ports in sd.get("ports_par_ip", {}).values()
         )
         progress["details"] = f"{total_ports} ports ouverts trouvés"
+        print(
+            f"[PERF][pipeline] step=ports duree={progress['step_duration']}s "
+            f"open_ports={total_ports}"
+        )
 
         # Étape 4 : Technologies
         progress["current_step"] = 4
@@ -137,6 +149,19 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
             detecter_technologies(sous_domaines_scannes)
         )
         progress["step_duration"] = round(t.time() - debut, 1)
+        total_services = sum(
+            len(sd.get("services_web", [])) for sd in sous_domaines_enrichis
+        )
+        total_technologies = len({
+            tech
+            for sd in sous_domaines_enrichis
+            for service in sd.get("services_web", [])
+            for tech in service.get("technologies", [])
+        })
+        print(
+            f"[PERF][pipeline] step=technologies duree={progress['step_duration']}s "
+            f"services={total_services} technologies={total_technologies}"
+        )
 
         # Étape 5 : Endpoints
         progress["current_step"] = 5
@@ -145,6 +170,15 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
         debut = t.time()
         sous_domaines_fuzzes = lancer_decouverte_endpoints(sous_domaines_enrichis)
         progress["step_duration"] = round(t.time() - debut, 1)
+        total_endpoints = sum(
+            len(service.get("endpoints", []))
+            for sd in sous_domaines_fuzzes
+            for service in sd.get("services_web", [])
+        )
+        print(
+            f"[PERF][pipeline] step=endpoints duree={progress['step_duration']}s "
+            f"endpoints={total_endpoints}"
+        )
 
         # Étape 6 : Assemblage
         progress["current_step"] = 6
@@ -165,6 +199,10 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
             pass
 
         progress["step_duration"] = round(t.time() - debut, 1)
+        print(
+            f"[PERF][pipeline] step=assemble_save duree={progress['step_duration']}s "
+            f"total={duree_totale}s"
+        )
         progress["status"] = "done"
         progress["total_duration"] = duree_totale
         progress["scan_id"] = resultat_final.get("scan_id")

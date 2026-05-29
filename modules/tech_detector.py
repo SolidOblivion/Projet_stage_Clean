@@ -15,11 +15,12 @@ Toute la connaissance métier est dans modules/signatures/web_signatures.py.
 import asyncio
 import re
 import ssl
+from urllib.parse import urlsplit, urlunsplit
 
 import aiohttp
 from bs4 import BeautifulSoup
 
-from config.settings import TECH_HTTP_TIMEOUT
+from config.settings import SHARE_HTML_WITH_ENDPOINT_DISCOVERY, TECH_HTTP_TIMEOUT
 from modules.signatures.web_signatures import WEB_SIGNATURES
 from modules.signatures.cpe_mapper import generer_cpe, determiner_cpe_status
 
@@ -48,6 +49,27 @@ MAX_RESPONSE_SIZE = 500_000
 # Longueur max d'une version extraite (défense en profondeur)
 # TODO(security) : les versions proviennent de serveurs tiers non fiables
 MAX_VERSION_LENGTH = 32
+
+
+def normaliser_url_service(url):
+    if not url:
+        return None
+
+    parsed = urlsplit(url.strip())
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        return None
+
+    path = parsed.path or "/"
+    if len(path) > 1:
+        path = path.rstrip("/")
+
+    return urlunsplit((
+        parsed.scheme.lower(),
+        parsed.netloc.lower(),
+        path,
+        parsed.query,
+        "",
+    ))
 
 
 # ──────────────────────────────────────────────────────────────
@@ -543,13 +565,27 @@ async def visiter_service_async(session, sous_domaine, port, ssl_ctx):
                 html=html,
             )
 
-            return {
+            service = {
                 "url": url,
                 "final_url": str(reponse.url),
                 "status_code": reponse.status,
                 "technologies": technologies,
                 "technology_details": technology_details,
             }
+
+            content_type = reponse.headers.get("Content-Type", "")
+            if (
+                SHARE_HTML_WITH_ENDPOINT_DISCOVERY
+                and "text/html" in content_type.lower()
+            ):
+                service["_html_cache"] = {
+                    "url": str(reponse.url),
+                    "html": html,
+                    "status_code": reponse.status,
+                    "content_type": content_type,
+                }
+
+            return service
 
     except Exception as e:
         print(
@@ -607,10 +643,14 @@ async def detecter_technologies(sous_domaines_scannes):
                     if resultat is None:
                         continue
 
-                    if resultat["final_url"] in urls_finales_visitees:
+                    final_url_norm = (
+                        normaliser_url_service(resultat["final_url"])
+                        or resultat["final_url"]
+                    )
+                    if final_url_norm in urls_finales_visitees:
                         continue
 
-                    urls_finales_visitees.add(resultat["final_url"])
+                    urls_finales_visitees.add(final_url_norm)
                     services_web.append(resultat)
                     print(f"     {resultat['technologies']}")
             else:
