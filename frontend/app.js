@@ -132,7 +132,7 @@ async function fetchScans() {
             renderStats(data.data);
         }
     } catch {
-        tableBody.innerHTML = '<tr><td colspan="7" class="empty-td">Erreur de connexion au serveur</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="9" class="empty-td">Erreur de connexion au serveur</td></tr>';
     }
 }
 
@@ -192,7 +192,7 @@ function renderStats(scans) {
 // ── Render Table ──
 function renderTable(scans) {
     if (!scans.length) {
-        tableBody.innerHTML = '<tr><td colspan="7" class="empty-td">Aucun scan dans l\'historique</td></tr>';
+        tableBody.innerHTML = '<tr><td colspan="9" class="empty-td">Aucun scan dans l\'historique</td></tr>';
         return;
     }
     tableBody.innerHTML = '';
@@ -212,8 +212,10 @@ function renderTable(scans) {
             <td style="color:var(--text2);font-size:12px">${d} ${s.total_duration ? `<br><span style="color:var(--text3)">${s.total_duration}s</span>` : ''}</td>
             <td>${modePill}</td>
             <td><span class="pill b">${s.total_subdomains || 0}</span></td>
+            <td><span class="pill ip">${s.total_ips || 0}</span></td>
             <td><span class="pill g">${s.total_open_ports || 0}</span></td>
             <td><span class="pill o">${s.total_technologies || 0}</span></td>
+            <td><span class="pill ep">${s.total_endpoints || 0}</span></td>
             <td>
                 <div class="actions">
                     <button class="btn-sm" onclick="openModal('${scan.scan_id}')">

@@ -209,11 +209,13 @@ body {
 .target-name { font-weight:700; font-size:14px; display:flex; align-items:center; gap:8px; }
 .target-dot  { width:8px; height:8px; border-radius:50%; background:var(--accent); flex-shrink:0; }
 .pill { display:inline-block; padding:3px 10px; border-radius:20px; font-size:12px; font-weight:600; }
-.pill.b { background:var(--blue-soft);   color:var(--blue); }
-.pill.g { background:var(--green-soft);  color:var(--green); }
-.pill.o { background:var(--orange-soft); color:var(--orange); }
-.pill.p { background:var(--accent-soft); color:var(--accent); }
+.pill.b    { background:var(--blue-soft);   color:var(--blue); }
+.pill.g    { background:var(--green-soft);  color:var(--green); }
+.pill.o    { background:var(--orange-soft); color:var(--orange); }
+.pill.p    { background:var(--accent-soft); color:var(--accent); }
 .pill.gray { background:var(--bg); color:var(--text2); border:1px solid var(--border); }
+.pill.ip   { background:#e0f2fe; color:#0284c7; }
+.pill.ep   { background:#fdf4ff; color:#a21caf; }
 
 .actions { display:flex; gap:6px; }
 .btn-sm {
