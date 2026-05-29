@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 
 from config.settings import (
     CRAWL_CONCURRENCY,
+    CRAWL_FILTERED_QUERY_PARAMS,
     CRAWL_TIMEOUT,
     MAX_CRAWL_DEPTH,
     MAX_CRAWL_PAGES,
@@ -29,11 +30,6 @@ HEADERS_NAVIGATEUR = {
 }
 
 SOURCE_ORDER = ("fuzzing", "crawler")
-IGNORED_QUERY_PARAMS = {
-    "page", "p", "offset", "start", "sort",
-    "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
-    "locale", "lang", "language",
-}
 STATIC_PATH_PREFIXES = (
     "/_next/static/",
     "/static/",
@@ -77,11 +73,11 @@ def normaliser_url(url, base_url=None):
     if len(path) > 1:
         path = path.rstrip("/")
 
-    # Garder seulement les query params simples et stables limite les boucles.
+    # Seuls les noms de query params configurés sont filtrés ; le path reste intact.
     query_items = [
         (key, value)
         for key, value in parse_qsl(parsed.query, keep_blank_values=True)
-        if key.lower() not in IGNORED_QUERY_PARAMS
+        if key.lower() not in CRAWL_FILTERED_QUERY_PARAMS
     ]
     query = urlencode(sorted(query_items)) if query_items else ""
 

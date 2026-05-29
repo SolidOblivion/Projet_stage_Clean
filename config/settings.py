@@ -6,6 +6,14 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+def _liste_env(nom, defaut):
+    return [
+        item.strip().lower()
+        for item in os.getenv(nom, defaut).split(",")
+        if item.strip()
+    ]
+
+
 MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "asm_project")
 
@@ -36,6 +44,17 @@ CRAWL_TIMEOUT = float(os.getenv("CRAWL_TIMEOUT", TIMEOUT))
 MAX_CRAWL_RESPONSE_SIZE = int(os.getenv("MAX_CRAWL_RESPONSE_SIZE", 500000))
 SHARE_HTML_WITH_ENDPOINT_DISCOVERY = (
     os.getenv("SHARE_HTML_WITH_ENDPOINT_DISCOVERY", "true").lower() == "true"
+)
+CRAWL_LANGUAGE_QUERY_PARAMS = _liste_env(
+    "CRAWL_LANGUAGE_QUERY_PARAMS",
+    "locale,lang,language,hl,lng,region,country",
+)
+CRAWL_NOISE_QUERY_PARAMS = _liste_env(
+    "CRAWL_NOISE_QUERY_PARAMS",
+    "page,p,offset,start,sort,utm_source,utm_medium,utm_campaign,utm_term,utm_content",
+)
+CRAWL_FILTERED_QUERY_PARAMS = set(
+    CRAWL_LANGUAGE_QUERY_PARAMS + CRAWL_NOISE_QUERY_PARAMS
 )
 
 SUBDOMAINS_WORDLIST = [
