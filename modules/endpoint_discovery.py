@@ -65,7 +65,11 @@ async def decouvrir_endpoints_async(sous_domaines_enrichis):
     
     total_trouves = 0
 
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(
+        resolver=aiohttp.resolver.ThreadedResolver()
+    )
+
+    async with aiohttp.ClientSession(connector=connector) as session:
         for entree in sous_domaines_enrichis:
             sous_domaine = entree.get("subdomain")
             services_web = entree.get("services_web", [])

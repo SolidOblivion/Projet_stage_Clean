@@ -310,3 +310,65 @@ body {
 
 .dns-row { font-size:12px; color:var(--text2); font-family:monospace; }
 .no-data { color:var(--text3); font-size:13px; font-style:italic; }
+
+/* ── Technology Details (Mini-Wappalyzer) ── */
+.tag-tech-detail {
+    display:inline-flex; align-items:center; gap:5px;
+    background:var(--accent-soft); color:var(--accent);
+    padding:4px 10px; border-radius:var(--radius-xs);
+    font-size:12px; font-weight:600;
+    transition:transform .15s;
+}
+.tag-tech-detail:hover { transform:translateY(-1px); }
+.tag-tech-version {
+    background:var(--accent); color:white;
+    padding:1px 6px; border-radius:4px;
+    font-size:10px; font-weight:700; font-family:monospace;
+}
+.confidence-badge {
+    display:inline-block;
+    padding:1px 6px; border-radius:4px;
+    font-size:10px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.3px;
+}
+.confidence-high   { background:var(--green-soft); color:var(--green); }
+.confidence-medium { background:var(--orange-soft); color:var(--orange); }
+.confidence-low    { background:var(--bg); color:var(--text3); border:1px solid var(--border); }
+
+.cpe-block {
+    background:var(--bg); border:1px solid var(--border);
+    border-radius:var(--radius-xs); padding:10px 14px;
+    margin-top:8px;
+}
+.cpe-block-title {
+    font-size:11px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.5px; color:var(--text3); margin-bottom:6px;
+    display:flex; align-items:center; gap:6px;
+}
+.cpe-entry {
+    display:flex; align-items:center; gap:8px;
+    padding:5px 0; font-size:12px;
+}
+.cpe-entry + .cpe-entry { border-top:1px solid var(--border); }
+.cpe-uri {
+    font-family:monospace; font-size:11px; color:var(--text2);
+    word-break:break-all; flex:1;
+}
+.cpe-tech {
+    font-weight:700; color:var(--text); font-size:12px;
+    white-space:nowrap;
+}
+.cpe-link {
+    font-size:11px; color:var(--blue); text-decoration:none;
+    font-weight:600; white-space:nowrap;
+}
+.cpe-link:hover { text-decoration:underline; }
+
+.tech-evidence {
+    font-size:11px; color:var(--text3); font-family:monospace;
+    max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.tech-source {
+    font-size:10px; color:var(--text3); font-weight:500;
+}
+

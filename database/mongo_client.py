@@ -65,6 +65,8 @@ def lister_scans():
                 "target": 1,
                 "scan_date": 1,
                 "summary": 1,
+                "mode": 1,
+                "cpe_matches": 1,
                 "_id": 1,
             },
         ).sort("scan_date", DESCENDING)

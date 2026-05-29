@@ -1,11 +1,31 @@
+"""
+tech_detector.py — Moteur de détection technologique (mini-Wappalyzer).
+
+Architecture :
+    web_signatures.py  →  appliquer_signatures()  →  normaliser_detections()
+                                                            ↓
+                                                     cpe_mapper.py
+                                                            ↓
+                                              technology_details + cpe_matches
+
+Ce module ne contient AUCUNE signature en dur.
+Toute la connaissance métier est dans modules/signatures/web_signatures.py.
+"""
+
 import asyncio
+import re
 import ssl
 
 import aiohttp
 from bs4 import BeautifulSoup
 
-from config.settings import TIMEOUT
+from config.settings import TECH_HTTP_TIMEOUT
+from modules.signatures.web_signatures import WEB_SIGNATURES
+from modules.signatures.cpe_mapper import generer_cpe, determiner_cpe_status
 
+# ──────────────────────────────────────────────────────────────
+# CONSTANTES
+# ──────────────────────────────────────────────────────────────
 
 PORTS_WEB = {
     80: "http",
@@ -25,162 +45,477 @@ HEADERS_NAVIGATEUR = {
 
 MAX_RESPONSE_SIZE = 500_000
 
-CANONICAL_TECHNOLOGIES = {
-    "cloudflare": "Cloudflare",
-    "aws cloudfront": "AWS CloudFront",
-    "wordpress": "WordPress",
-    "drupal": "Drupal",
-    "next.js": "Next.js",
-    "nuxt.js": "Nuxt.js",
-    "angular": "Angular",
-    "react": "React",
-    "vue.js": "Vue.js",
-    "jquery": "jQuery",
-    "bootstrap": "Bootstrap",
-    "google analytics": "Google Analytics",
-    "facebook pixel": "Facebook Pixel",
-    "shopify": "Shopify",
-    "squarespace": "Squarespace",
-    "wix": "Wix",
-    "php": "PHP",
-    "java": "Java",
-    "asp.net": "ASP.NET",
-    "laravel": "Laravel",
-    "django": "Django",
-    "ruby on rails": "Ruby on Rails",
-}
+# Longueur max d'une version extraite (défense en profondeur)
+# TODO(security) : les versions proviennent de serveurs tiers non fiables
+MAX_VERSION_LENGTH = 32
+
+
+# ──────────────────────────────────────────────────────────────
+# PRÉ-COMPILATION DES REGEX (évite un ReDoS à chaque requête)
+# ──────────────────────────────────────────────────────────────
+
+_COMPILED_SIGNATURES = []
+
+def _compiler_signatures():
+    """Compile toutes les regex des signatures au chargement du module."""
+    for sig in WEB_SIGNATURES:
+        compiled = {
+            "name": sig["name"],
+            "category": sig.get("category", "unknown"),
+            "detection": {},
+        }
+
+        detection = sig.get("detection", {})
+
+        # header_regex : {header_name: pattern}
+        if "header_regex" in detection:
+            compiled["detection"]["header_regex"] = {
+                header: re.compile(pattern, re.IGNORECASE)
+                for header, pattern in detection["header_regex"].items()
+            }
+
+        # meta_regex : {meta_name: pattern}
+        if "meta_regex" in detection:
+            compiled["detection"]["meta_regex"] = {
+                meta: re.compile(pattern, re.IGNORECASE)
+                for meta, pattern in detection["meta_regex"].items()
+            }
+
+        # script_regex : [pattern, ...]
+        if "script_regex" in detection:
+            compiled["detection"]["script_regex"] = [
+                re.compile(pattern, re.IGNORECASE)
+                for pattern in detection["script_regex"]
+            ]
+
+        # html_version_regex : extraire une version directement du HTML brut
+        if "html_version_regex" in detection:
+            compiled["detection"]["html_version_regex"] = [
+                re.compile(pattern, re.IGNORECASE)
+                for pattern in detection["html_version_regex"]
+            ]
+
+        # Les types non-regex sont copiés tels quels
+        for key in ("header_contains", "html_contains", "cookie_contains"):
+            if key in detection:
+                compiled["detection"][key] = detection[key]
+
+        _COMPILED_SIGNATURES.append(compiled)
+
+
+# Compilation au chargement
+_compiler_signatures()
+
+
+# ──────────────────────────────────────────────────────────────
+# FONCTIONS DU MOTEUR
+# ──────────────────────────────────────────────────────────────
+
+def creer_detection(name, version, source, confidence, evidence):
+    """
+    Crée une détection structurée normalisée.
+
+    Args:
+        name       : Nom canonique de la technologie
+        version    : Version détectée (str ou None)
+        source     : Source de détection (ex: "header:server", "meta:generator")
+        confidence : Niveau de confiance ("high", "medium", "low")
+        evidence   : Preuve brute (la chaîne qui a déclenché la détection)
+
+    Returns:
+        dict avec les champs standardisés
+    """
+    if version:
+        version = str(version)[:MAX_VERSION_LENGTH]
+
+    return {
+        "name": name,
+        "version": version,
+        "source": source,
+        "confidence": confidence,
+        "evidence": str(evidence)[:200] if evidence else None,
+    }
+
+
+def extraire_version(texte, regex_compile):
+    """
+    Extrait une version depuis un texte via une regex compilée.
+
+    Le premier groupe de capture (groupe 1) est utilisé comme version.
+    Retourne None si pas de match ou pas de groupe.
+    """
+    if not texte or not regex_compile:
+        return None
+
+    match = regex_compile.search(texte)
+    if match and match.lastindex and match.lastindex >= 1:
+        version = match.group(1)
+        if version:
+            return version[:MAX_VERSION_LENGTH]
+    return None
 
 
 def creer_contexte_ssl_permissif():
+    """Crée un contexte SSL qui accepte tous les certificats."""
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
     return ctx
 
 
-def normaliser_technologies(technologies):
-    technologies_normalisees = []
-    deja_vues = set()
+# ──────────────────────────────────────────────────────────────
+# APPLICATION DES SIGNATURES
+# ──────────────────────────────────────────────────────────────
 
-    for techno in technologies:
-        if not techno:
-            continue
+def appliquer_signatures(headers, cookies_str, html, meta_tags, scripts_src):
+    """
+    Applique toutes les signatures compilées sur les données brutes.
 
-        techno = techno.strip()
-        cle = techno.lower()
-        techno_canonique = CANONICAL_TECHNOLOGIES.get(cle, techno)
-        cle_canonique = techno_canonique.lower()
+    Args:
+        headers     : dict des headers HTTP (clé = nom, valeur = valeur)
+        cookies_str : chaîne brute du header Set-Cookie
+        html        : contenu HTML brut (str)
+        meta_tags   : dict {meta_name: meta_content} extrait par BeautifulSoup
+        scripts_src : list des attributs src des balises <script>
 
-        if cle_canonique in deja_vues:
-            continue
+    Returns:
+        list de détections brutes (avant normalisation)
+    """
+    # HTTP headers sont case-insensitive (RFC 7230) — normaliser en minuscules
+    # pour un lookup fiable quelle que soit la casse retournée par le serveur
+    headers_lower = {k.lower(): v for k, v in headers.items()}
 
-        deja_vues.add(cle_canonique)
-        technologies_normalisees.append(techno_canonique)
+    detections = []
+    html_lower = html.lower() if html else ""
+    cookies_lower = cookies_str.lower() if cookies_str else ""
 
-    return technologies_normalisees
 
+    for sig in _COMPILED_SIGNATURES:
+        name = sig["name"]
+        detection = sig["detection"]
+
+        # ── header_contains ──
+        if "header_contains" in detection:
+            for header_name, expected_substr in detection["header_contains"].items():
+                header_val = headers_lower.get(header_name.lower(), "")
+                if not header_val:
+                    continue
+                # Si expected_substr est vide, la simple présence du header suffit
+                if expected_substr == "" or expected_substr.lower() in header_val.lower():
+                    detections.append(creer_detection(
+                        name=name,
+                        version=None,
+                        source=f"header:{header_name.lower()}",
+                        confidence="high",
+                        evidence=f"{header_name}: {header_val[:100]}",
+                    ))
+
+        # ── header_regex ──
+        if "header_regex" in detection:
+            for header_name, regex in detection["header_regex"].items():
+                header_val = headers_lower.get(header_name.lower(), "")
+                if not header_val:
+                    continue
+                version = extraire_version(header_val, regex)
+                if regex.search(header_val):
+                    detections.append(creer_detection(
+                        name=name,
+                        version=version,
+                        source=f"header:{header_name.lower()}",
+                        confidence="high",
+                        evidence=f"{header_name}: {header_val[:100]}",
+                    ))
+
+        # ── meta_regex ──
+        if "meta_regex" in detection:
+            for meta_name, regex in detection["meta_regex"].items():
+                meta_content = meta_tags.get(meta_name.lower(), "")
+                if not meta_content:
+                    continue
+                version = extraire_version(meta_content, regex)
+                if regex.search(meta_content):
+                    detections.append(creer_detection(
+                        name=name,
+                        version=version,
+                        source=f"meta:{meta_name.lower()}",
+                        confidence="high",
+                        evidence=meta_content[:100],
+                    ))
+
+        # ── html_contains ──
+        # IMPORTANT : comparer fragment.lower() contre html_lower
+        # pour que les fragments avec majuscules/underscores (__NEXT_DATA__, etc.) matchent
+        if "html_contains" in detection:
+            for fragment in detection["html_contains"]:
+                if fragment.lower() in html_lower:
+                    detections.append(creer_detection(
+                        name=name,
+                        version=None,
+                        source="html",
+                        confidence="medium",
+                        evidence=f"'{fragment}' found in HTML",
+                    ))
+                    # Un seul match HTML suffit pour cette techno
+                    break
+
+        # ── html_version_regex ── (extraction de version depuis le HTML brut)
+        if "html_version_regex" in detection:
+            for regex in detection["html_version_regex"]:
+                version = extraire_version(html, regex)  # cherche dans le HTML original (pas lower)
+                if version:
+                    detections.append(creer_detection(
+                        name=name,
+                        version=version,
+                        source="html",
+                        confidence="medium",
+                        evidence=f"version {version} found in HTML",
+                    ))
+                    break
+
+        # ── script_regex ──
+        if "script_regex" in detection:
+            for regex in detection["script_regex"]:
+                for src in scripts_src:
+                    version = extraire_version(src, regex)
+                    if regex.search(src):
+                        detections.append(creer_detection(
+                            name=name,
+                            version=version,
+                            source="script",
+                            confidence="medium",
+                            evidence=f"src={src[:100]}",
+                        ))
+                        break  # Un seul match script suffit
+                else:
+                    continue
+                break  # Sortir de la boucle regex aussi
+
+        # ── cookie_contains ──
+        if "cookie_contains" in detection:
+            for cookie_name, _ in detection["cookie_contains"].items():
+                if cookie_name.lower() in cookies_lower:
+                    detections.append(creer_detection(
+                        name=name,
+                        version=None,
+                        source="cookie",
+                        confidence="medium",
+                        evidence=f"Cookie '{cookie_name}' present",
+                    ))
+                    break  # Un seul cookie suffit
+
+    return detections
+
+
+# ──────────────────────────────────────────────────────────────
+# NORMALISATION
+# ──────────────────────────────────────────────────────────────
+
+def normaliser_detections(detections):
+    """
+    Fusionne et dédoublonne les détections.
+
+    Règles :
+        - Clé de fusion = (name, version) — deux versions ≠ doublons
+        - Les sources sont agrégées en liste
+        - La confiance la plus haute est conservée
+        - L'evidence la plus informative est conservée
+        - Le CPE est calculé après fusion
+
+    Returns:
+        list de détections normalisées avec CPE
+    """
+    CONFIDENCE_RANK = {"high": 3, "medium": 2, "low": 1}
+
+    # Regrouper par (name, version)
+    merged = {}
+    for det in detections:
+        key = (det["name"], det["version"])
+
+        if key not in merged:
+            merged[key] = {
+                "name": det["name"],
+                "version": det["version"],
+                "sources": [],
+                "confidence": det["confidence"],
+                "evidence": det["evidence"],
+            }
+
+        entry = merged[key]
+
+        # Ajouter la source si pas déjà présente
+        if det["source"] not in entry["sources"]:
+            entry["sources"].append(det["source"])
+
+        # Garder la confiance la plus haute
+        if CONFIDENCE_RANK.get(det["confidence"], 0) > CONFIDENCE_RANK.get(entry["confidence"], 0):
+            entry["confidence"] = det["confidence"]
+            entry["evidence"] = det["evidence"]
+
+    # Enrichir avec les CPE
+    result = []
+    for entry in merged.values():
+        cpe = generer_cpe(entry["name"], entry["version"])
+        cpe_status = determiner_cpe_status(entry["name"], cpe)
+
+        result.append({
+            "name": entry["name"],
+            "version": entry["version"],
+            "sources": entry["sources"],
+            "confidence": entry["confidence"],
+            "evidence": entry["evidence"],
+            "cpe": cpe,
+            "cpe_status": cpe_status,
+        })
+
+    # Trier : high d'abord, puis par nom
+    result.sort(key=lambda d: (-CONFIDENCE_RANK.get(d["confidence"], 0), d["name"]))
+
+    return result
+
+
+# ──────────────────────────────────────────────────────────────
+# POINT D'ENTRÉE PRINCIPAL
+# ──────────────────────────────────────────────────────────────
+
+def detecter_depuis_reponse(headers, html):
+    """
+    Point d'entrée unique de détection.
+
+    Parse le HTML avec BeautifulSoup, extrait les balises meta et scripts,
+    puis applique les signatures et normalise les résultats.
+
+    Args:
+        headers : dict des headers HTTP
+        html    : contenu HTML brut (str)
+
+    Returns:
+        tuple (technologies, technology_details)
+            technologies      : list[str] — noms seuls (rétrocompatibilité)
+            technology_details : list[dict] — détections structurées complètes
+    """
+    # Extraire les meta tags avec BeautifulSoup
+    meta_tags = {}
+    scripts_src = []
+
+    if html:
+        soup = BeautifulSoup(html, "html.parser")
+
+        # Meta tags
+        for meta in soup.find_all("meta", attrs={"name": True}):
+            nom = meta.get("name", "").lower()
+            contenu = meta.get("content", "")
+            if nom and contenu:
+                meta_tags[nom] = contenu
+
+        # Scripts src
+        for script in soup.find_all("script", src=True):
+            src = script.get("src", "")
+            if src:
+                scripts_src.append(src)
+
+    # Cookies depuis les headers (lookup case-insensitive)
+    headers_ci = {k.lower(): v for k, v in headers.items()}
+    cookies_str = headers_ci.get("set-cookie", "")
+
+    # Appliquer les signatures
+    detections_brutes = appliquer_signatures(
+        headers=headers,
+        cookies_str=cookies_str,
+        html=html or "",
+        meta_tags=meta_tags,
+        scripts_src=scripts_src,
+    )
+
+    # Normaliser
+    technology_details = normaliser_detections(detections_brutes)
+
+    # Extraire les noms seuls (rétrocompatibilité)
+    technologies = list(dict.fromkeys(d["name"] for d in technology_details))
+
+    return technologies, technology_details
+
+
+# ──────────────────────────────────────────────────────────────
+# WRAPPERS LEGACY — Rétrocompatibilité
+# ──────────────────────────────────────────────────────────────
 
 def analyser_headers(headers):
-    technologies = []
+    """
+    Legacy wrapper — rétrocompatibilité.
 
-    serveur = headers.get("Server", "")
-    if serveur:
-        technologies.append(serveur)
-
-    powered_by = headers.get("X-Powered-By", "")
-    if powered_by:
-        technologies.append(powered_by)
-
-    generator = headers.get("X-Generator", "")
-    if generator:
-        technologies.append(generator)
-
-    via = headers.get("Via", "")
-    if "cloudflare" in via.lower():
-        technologies.append("Cloudflare")
-
-    if "CF-RAY" in headers and "Cloudflare" not in technologies:
-        technologies.append("Cloudflare")
-
-    if "X-Amz-Cf-Id" in headers:
-        technologies.append("AWS CloudFront")
-
-    return technologies
+    Retourne une liste de noms de technologies détectées via les headers.
+    Utilise désormais le moteur de signatures en interne.
+    """
+    detections = appliquer_signatures(
+        headers=headers,
+        cookies_str="",
+        html="",
+        meta_tags={},
+        scripts_src=[],
+    )
+    return list(dict.fromkeys(d["name"] for d in detections))
 
 
 def analyser_cookies(headers):
-    technologies = []
+    """
+    Legacy wrapper — rétrocompatibilité.
 
-    signatures_cookies = {
-        "PHPSESSID": "PHP",
-        "JSESSIONID": "Java",
-        "ASP.NET_SessionId": "ASP.NET",
-        "laravel_session": "Laravel",
-        "django_session": "Django",
-        "rack.session": "Ruby on Rails",
-    }
-
-    set_cookie = headers.get("Set-Cookie", "")
-
-    for signature, techno in signatures_cookies.items():
-        if signature.lower() in set_cookie.lower() and techno not in technologies:
-            technologies.append(techno)
-
-    return technologies
+    Retourne une liste de noms de technologies détectées via les cookies.
+    """
+    cookies_str = headers.get("Set-Cookie", "")
+    detections = appliquer_signatures(
+        headers={},
+        cookies_str=cookies_str,
+        html="",
+        meta_tags={},
+        scripts_src=[],
+    )
+    return list(dict.fromkeys(d["name"] for d in detections))
 
 
 def analyser_html(html):
-    technologies = []
-    soup = BeautifulSoup(html, "html.parser")
+    """
+    Legacy wrapper — rétrocompatibilité.
 
-    meta_generator = soup.find("meta", {"name": "generator"})
-    if meta_generator:
-        contenu = meta_generator.get("content", "")
-        if contenu:
-            technologies.append(contenu)
+    Retourne une liste de noms de technologies détectées via le HTML.
+    """
+    meta_tags = {}
+    scripts_src = []
 
-    signatures_scripts = {
-        "wp-content": "WordPress",
-        "wp-includes": "WordPress",
-        "sites/all": "Drupal",
-        "sites/default": "Drupal",
-        "_next": "Next.js",
-        "nuxt": "Nuxt.js",
-        "angular": "Angular",
-        "react": "React",
-        "vue": "Vue.js",
-        "jquery": "jQuery",
-        "bootstrap": "Bootstrap",
-    }
+    if html:
+        soup = BeautifulSoup(html, "html.parser")
+        for meta in soup.find_all("meta", attrs={"name": True}):
+            nom = meta.get("name", "").lower()
+            contenu = meta.get("content", "")
+            if nom and contenu:
+                meta_tags[nom] = contenu
+        for script in soup.find_all("script", src=True):
+            src = script.get("src", "")
+            if src:
+                scripts_src.append(src)
 
-    scripts = soup.find_all("script", src=True)
-    for script in scripts:
-        src = script.get("src", "").lower()
-        for signature, techno in signatures_scripts.items():
-            if signature in src and techno not in technologies:
-                technologies.append(techno)
+    detections = appliquer_signatures(
+        headers={},
+        cookies_str="",
+        html=html or "",
+        meta_tags=meta_tags,
+        scripts_src=scripts_src,
+    )
+    return list(dict.fromkeys(d["name"] for d in detections))
 
-    html_lower = html.lower()
 
-    signatures_html = {
-        "wp-json": "WordPress",
-        "shopify.com/s/files": "Shopify",
-        "cdn.shopify": "Shopify",
-        "squarespace": "Squarespace",
-        "wix.com": "Wix",
-        "gtag": "Google Analytics",
-        "google-analytics": "Google Analytics",
-        "fbq(": "Facebook Pixel",
-    }
-
-    for signature, techno in signatures_html.items():
-        if signature in html_lower and techno not in technologies:
-            technologies.append(techno)
-
-    return technologies
-
+# ──────────────────────────────────────────────────────────────
+# VISITE ASYNC D'UN SERVICE WEB
+# ──────────────────────────────────────────────────────────────
 
 async def visiter_service_async(session, sous_domaine, port, ssl_ctx):
+    """
+    Visite un service web et retourne les technologies détectées.
+
+    Retourne un dict enrichi avec :
+        - technologies       : list[str] (rétrocompatibilité)
+        - technology_details : list[dict] (détections structurées + CPE)
+    """
     if port in [443, 8443]:
         url = f"https://{sous_domaine}:{port}"
     else:
@@ -194,7 +529,7 @@ async def visiter_service_async(session, sous_domaine, port, ssl_ctx):
     try:
         async with session.get(
             url,
-            timeout=aiohttp.ClientTimeout(total=TIMEOUT),
+            timeout=aiohttp.ClientTimeout(total=TECH_HTTP_TIMEOUT),
             ssl=ssl_ctx,
             allow_redirects=True,
             headers=HEADERS_NAVIGATEUR,
@@ -202,33 +537,49 @@ async def visiter_service_async(session, sous_domaine, port, ssl_ctx):
             html_complet = await reponse.text()
             html = html_complet[:MAX_RESPONSE_SIZE]
 
-            techs_headers = analyser_headers(dict(reponse.headers))
-            techs_cookies = analyser_cookies(dict(reponse.headers))
-            techs_html = analyser_html(html)
-
-            toutes_les_techs = normaliser_technologies(
-                techs_headers + techs_cookies + techs_html
+            # Nouveau moteur de détection
+            technologies, technology_details = detecter_depuis_reponse(
+                headers=dict(reponse.headers),
+                html=html,
             )
 
             return {
                 "url": url,
                 "final_url": str(reponse.url),
                 "status_code": reponse.status,
-                "technologies": toutes_les_techs,
+                "technologies": technologies,
+                "technology_details": technology_details,
             }
 
     except Exception as e:
-        print(f"     {url} : {e}")
+        print(
+            f"     {url} : {type(e).__name__} {repr(e)} "
+            f"(timeout={TECH_HTTP_TIMEOUT}s)"
+        )
         return None
 
 
+# ──────────────────────────────────────────────────────────────
+# ORCHESTRATEUR DE DÉTECTION
+# ──────────────────────────────────────────────────────────────
+
 async def detecter_technologies(sous_domaines_scannes):
+    """
+    Détecte les technologies pour tous les sous-domaines scannés.
+
+    Pour chaque sous-domaine, visite tous les ports web ouverts
+    et applique le moteur de signatures.
+    """
     print("\nDétection des technologies...")
 
     ssl_ctx = creer_contexte_ssl_permissif()
     resultats = []
 
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(
+        resolver=aiohttp.resolver.ThreadedResolver()
+    )
+
+    async with aiohttp.ClientSession(connector=connector) as session:
         for entree in sous_domaines_scannes:
             sous_domaine = entree["subdomain"]
             ports_par_ip = entree["ports_par_ip"]

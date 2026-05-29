@@ -266,17 +266,24 @@ async function openModal(id) {
 }
 
 function renderModalContent(data) {
-    const dur = data.summary?.total_duration 
-        ? `<span style="font-size:13px; font-weight:normal; color:var(--text3); margin-left:8px;">(Durée : ${data.summary.total_duration}s)</span>` 
+    const dur = data.summary?.total_duration
+        ? ` (Durée : ${data.summary.total_duration}s)`
         : '';
-    modalTitle.innerHTML = `Rapport — ${data.target}${dur}`;
+
+    modalTitle.textContent = '';
+    const titleText = document.createTextNode(`Rapport — ${data.target}${dur}`);
+    modalTitle.appendChild(titleText);
 
     if (!data.subdomains || !data.subdomains.length) {
-        modalBody.innerHTML = '<p class="no-data">Aucun résultat disponible pour ce scan.</p>';
+        modalBody.replaceChildren();
+        const p = document.createElement('p');
+        p.className = 'no-data';
+        p.textContent = 'Aucun résultat disponible pour ce scan.';
+        modalBody.appendChild(p);
         return;
     }
 
-    modalBody.innerHTML = '';
+    modalBody.replaceChildren();
 
     data.subdomains.forEach(sd => {
         // ── Collecter tous les ports de toutes les IPs
@@ -294,86 +301,284 @@ function renderModalContent(data) {
         const ns = dns.ns || [];
         const cname = dns.cname;
 
-        // ── Construire la carte
+        // ── Construire la carte (DOM sécurisé)
         const card = document.createElement('div');
         card.className = 'sd-card';
 
-        let portsHTML = allPorts.length
-            ? allPorts.map(p => `<span class="tag-port">${p.port}/${p.proto} — ${p.service} <small style="opacity:.7">[${p.ip}]</small></span>`).join('')
-            : '<span class="no-data">Aucun port ouvert détecté</span>';
+        // Header
+        const header = document.createElement('div');
+        header.className = 'sd-header';
 
-        let dnsHTML = '';
-        if (ns.length)  dnsHTML += `<div class="dns-row">NS : ${ns.join(', ')}</div>`;
-        if (mx.length)  dnsHTML += `<div class="dns-row">MX : ${mx.join(', ')}</div>`;
-        if (cname)      dnsHTML += `<div class="dns-row">CNAME : ${cname}</div>`;
-        if (!dnsHTML)   dnsHTML = '<span class="no-data">Aucun enregistrement DNS spécial</span>';
+        const h4 = document.createElement('h4');
+        const icon = document.createElement('i');
+        icon.className = 'ph ph-link';
+        h4.appendChild(icon);
+        h4.appendChild(document.createTextNode(' ' + sd.subdomain));
 
-        // ── Services Web
-        let webHTML = '';
-        if (sd.services_web && sd.services_web.length) {
-            sd.services_web.forEach(sw => {
-                const statusClass = sw.status_code === 200 ? 's200'
-                    : (sw.status_code === 403 ? 's403' : 's301');
+        const ipsSpan = document.createElement('span');
+        ipsSpan.className = 'sd-ips';
+        ipsSpan.textContent = (sd.ips || []).join(' • ');
 
-                let techsHTML = sw.technologies && sw.technologies.length
-                    ? sw.technologies.map(t => `<span class="tag-tech">${t}</span>`).join('')
-                    : '<span class="no-data">Aucune technologie détectée</span>';
+        header.appendChild(h4);
+        header.appendChild(ipsSpan);
+        card.appendChild(header);
 
-                let epHTML = '';
-                if (sw.endpoints && sw.endpoints.length) {
-                    epHTML = `
-                        <div class="info-row">
-                            <span class="info-label">Endpoints</span>
-                            <ul class="ep-list">
-                                ${sw.endpoints.map(ep =>
-                                    `<li><span>${ep.path}</span><span class="c${ep.status_code}">${ep.status_code}</span></li>`
-                                ).join('')}
-                            </ul>
-                        </div>`;
-                }
+        // Body
+        const body = document.createElement('div');
+        body.className = 'sd-body';
 
-                webHTML += `
-                    <div class="web-block">
-                        <div class="web-block-header">
-                            <a href="${sw.url}" target="_blank">${sw.url}</a>
-                            <span class="status-badge ${statusClass}">${sw.status_code}</span>
-                            ${sw.final_url && sw.final_url !== sw.url
-                                ? `<span style="font-size:11px;color:var(--text3)">→ ${sw.final_url}</span>`
-                                : ''}
-                        </div>
-                        <div class="web-block-body">
-                            <div class="info-row">
-                                <span class="info-label">Technologies</span>
-                                <div class="tags">${techsHTML}</div>
-                            </div>
-                            ${epHTML}
-                        </div>
-                    </div>`;
+        // ── Ports ouverts
+        const portsRow = document.createElement('div');
+        portsRow.className = 'info-row';
+        const portsLabel = document.createElement('span');
+        portsLabel.className = 'info-label';
+        portsLabel.textContent = 'Ports ouverts';
+        portsRow.appendChild(portsLabel);
+
+        const portsTags = document.createElement('div');
+        portsTags.className = 'tags';
+        if (allPorts.length) {
+            allPorts.forEach(p => {
+                const tag = document.createElement('span');
+                tag.className = 'tag-port';
+                tag.textContent = `${p.port}/${p.proto} — ${p.service} [${p.ip}]`;
+                portsTags.appendChild(tag);
             });
         } else {
-            webHTML = '<span class="no-data">Aucun service web détecté sur cette cible</span>';
+            const noData = document.createElement('span');
+            noData.className = 'no-data';
+            noData.textContent = 'Aucun port ouvert détecté';
+            portsTags.appendChild(noData);
+        }
+        portsRow.appendChild(portsTags);
+        body.appendChild(portsRow);
+
+        // ── DNS
+        const dnsRow = document.createElement('div');
+        dnsRow.className = 'info-row';
+        const dnsLabel = document.createElement('span');
+        dnsLabel.className = 'info-label';
+        dnsLabel.textContent = 'DNS';
+        dnsRow.appendChild(dnsLabel);
+
+        const dnsContent = document.createElement('div');
+        let hasDns = false;
+        if (ns.length) {
+            const d = document.createElement('div');
+            d.className = 'dns-row';
+            d.textContent = 'NS : ' + ns.join(', ');
+            dnsContent.appendChild(d);
+            hasDns = true;
+        }
+        if (mx.length) {
+            const d = document.createElement('div');
+            d.className = 'dns-row';
+            d.textContent = 'MX : ' + mx.join(', ');
+            dnsContent.appendChild(d);
+            hasDns = true;
+        }
+        if (cname) {
+            const d = document.createElement('div');
+            d.className = 'dns-row';
+            d.textContent = 'CNAME : ' + cname;
+            dnsContent.appendChild(d);
+            hasDns = true;
+        }
+        if (!hasDns) {
+            const noData = document.createElement('span');
+            noData.className = 'no-data';
+            noData.textContent = 'Aucun enregistrement DNS spécial';
+            dnsContent.appendChild(noData);
+        }
+        dnsRow.appendChild(dnsContent);
+        body.appendChild(dnsRow);
+
+        // ── Services Web
+        const webRow = document.createElement('div');
+        webRow.className = 'info-row';
+        const webLabel = document.createElement('span');
+        webLabel.className = 'info-label';
+        webLabel.textContent = 'Services web';
+        webRow.appendChild(webLabel);
+
+        const webContainer = document.createElement('div');
+        webContainer.style.cssText = 'flex:1;display:flex;flex-direction:column;gap:8px';
+
+        if (sd.services_web && sd.services_web.length) {
+            sd.services_web.forEach(sw => {
+                const webBlock = document.createElement('div');
+                webBlock.className = 'web-block';
+
+                // Web block header
+                const wbHeader = document.createElement('div');
+                wbHeader.className = 'web-block-header';
+
+                const urlLink = document.createElement('a');
+                urlLink.href = sw.url;
+                urlLink.target = '_blank';
+                urlLink.rel = 'noopener noreferrer';
+                urlLink.textContent = sw.url;
+                wbHeader.appendChild(urlLink);
+
+                const statusBadge = document.createElement('span');
+                const statusClass = sw.status_code === 200 ? 's200'
+                    : (sw.status_code === 403 ? 's403' : 's301');
+                statusBadge.className = 'status-badge ' + statusClass;
+                statusBadge.textContent = sw.status_code;
+                wbHeader.appendChild(statusBadge);
+
+                if (sw.final_url && sw.final_url !== sw.url) {
+                    const redirect = document.createElement('span');
+                    redirect.style.cssText = 'font-size:11px;color:var(--text3)';
+                    redirect.textContent = '→ ' + sw.final_url;
+                    wbHeader.appendChild(redirect);
+                }
+
+                webBlock.appendChild(wbHeader);
+
+                // Web block body
+                const wbBody = document.createElement('div');
+                wbBody.className = 'web-block-body';
+
+                // Technologies (enrichies avec technology_details)
+                const techRow = document.createElement('div');
+                techRow.className = 'info-row';
+                const techLabel = document.createElement('span');
+                techLabel.className = 'info-label';
+                techLabel.textContent = 'Technologies';
+                techRow.appendChild(techLabel);
+
+                const techTags = document.createElement('div');
+                techTags.className = 'tags';
+
+                const details = sw.technology_details || [];
+                if (details.length) {
+                    details.forEach(det => {
+                        const tag = document.createElement('span');
+                        tag.className = 'tag-tech-detail';
+                        tag.title = det.evidence || '';
+
+                        const nameSpan = document.createTextNode(det.name);
+                        tag.appendChild(nameSpan);
+
+                        if (det.version) {
+                            const verBadge = document.createElement('span');
+                            verBadge.className = 'tag-tech-version';
+                            verBadge.textContent = det.version;
+                            tag.appendChild(verBadge);
+                        }
+
+                        const confBadge = document.createElement('span');
+                        confBadge.className = 'confidence-badge confidence-' + (det.confidence || 'medium');
+                        confBadge.textContent = det.confidence || 'medium';
+                        tag.appendChild(confBadge);
+
+                        techTags.appendChild(tag);
+                    });
+                } else if (sw.technologies && sw.technologies.length) {
+                    // Fallback si technology_details absent (anciens scans)
+                    sw.technologies.forEach(t => {
+                        const tag = document.createElement('span');
+                        tag.className = 'tag-tech';
+                        tag.textContent = t;
+                        techTags.appendChild(tag);
+                    });
+                } else {
+                    const noData = document.createElement('span');
+                    noData.className = 'no-data';
+                    noData.textContent = 'Aucune technologie détectée';
+                    techTags.appendChild(noData);
+                }
+                techRow.appendChild(techTags);
+                wbBody.appendChild(techRow);
+
+                // Endpoints
+                if (sw.endpoints && sw.endpoints.length) {
+                    const epRow = document.createElement('div');
+                    epRow.className = 'info-row';
+                    const epLabel = document.createElement('span');
+                    epLabel.className = 'info-label';
+                    epLabel.textContent = 'Endpoints';
+                    epRow.appendChild(epLabel);
+
+                    const epList = document.createElement('ul');
+                    epList.className = 'ep-list';
+                    sw.endpoints.forEach(ep => {
+                        const li = document.createElement('li');
+                        const pathSpan = document.createElement('span');
+                        pathSpan.textContent = ep.path;
+                        li.appendChild(pathSpan);
+
+                        const statusSpan = document.createElement('span');
+                        statusSpan.className = 'c' + ep.status_code;
+                        statusSpan.textContent = ep.status_code;
+                        li.appendChild(statusSpan);
+
+                        epList.appendChild(li);
+                    });
+                    epRow.appendChild(epList);
+                    wbBody.appendChild(epRow);
+                }
+
+                webBlock.appendChild(wbBody);
+                webContainer.appendChild(webBlock);
+            });
+        } else {
+            const noData = document.createElement('span');
+            noData.className = 'no-data';
+            noData.textContent = 'Aucun service web détecté sur cette cible';
+            webContainer.appendChild(noData);
         }
 
-        card.innerHTML = `
-            <div class="sd-header">
-                <h4><i class="ph ph-link"></i> ${sd.subdomain}</h4>
-                <span class="sd-ips">${(sd.ips || []).join(' • ')}</span>
-            </div>
-            <div class="sd-body">
-                <div class="info-row">
-                    <span class="info-label">Ports ouverts</span>
-                    <div class="tags">${portsHTML}</div>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">DNS</span>
-                    <div>${dnsHTML}</div>
-                </div>
-                <div class="info-row">
-                    <span class="info-label">Services web</span>
-                    <div style="flex:1;display:flex;flex-direction:column;gap:8px">${webHTML}</div>
-                </div>
-            </div>`;
-
+        webRow.appendChild(webContainer);
+        body.appendChild(webRow);
+        card.appendChild(body);
         modalBody.appendChild(card);
     });
+
+    // ── CPE Matches (section globale en bas du rapport)
+    const cpeMatches = data.cpe_matches || [];
+    if (cpeMatches.length) {
+        const cpeBlock = document.createElement('div');
+        cpeBlock.className = 'cpe-block';
+
+        const cpeTitle = document.createElement('div');
+        cpeTitle.className = 'cpe-block-title';
+
+        const shieldIcon = document.createElement('i');
+        shieldIcon.className = 'ph ph-shield-warning';
+        cpeTitle.appendChild(shieldIcon);
+        cpeTitle.appendChild(document.createTextNode(
+            `CPE Matches (${cpeMatches.length} technologies identifiées)`
+        ));
+        cpeBlock.appendChild(cpeTitle);
+
+        cpeMatches.forEach(match => {
+            const entry = document.createElement('div');
+            entry.className = 'cpe-entry';
+
+            const tech = document.createElement('span');
+            tech.className = 'cpe-tech';
+            tech.textContent = match.technology + (match.version ? ' ' + match.version : '');
+            entry.appendChild(tech);
+
+            const uri = document.createElement('span');
+            uri.className = 'cpe-uri';
+            uri.textContent = match.cpe_uri;
+            entry.appendChild(uri);
+
+            const link = document.createElement('a');
+            link.className = 'cpe-link';
+            link.href = 'https://nvd.nist.gov/vuln/search/results?cpe_version=cpe%3A%2F'
+                + encodeURIComponent(match.cpe_uri);
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = 'NVD →';
+            entry.appendChild(link);
+
+            cpeBlock.appendChild(entry);
+        });
+
+        modalBody.appendChild(cpeBlock);
+    }
 }
