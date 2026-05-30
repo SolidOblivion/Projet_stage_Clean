@@ -7,7 +7,6 @@ import time
 from config.settings import PORT_SCANNER_MODE
 from modules.data_mapper import assembler_resultats
 from modules.dns_resolver import resoudre_dns
-from modules.origin_tracker import is_cloudflare
 from modules.subdomain_discovery import trouver_sous_domaines
 from modules.tech_detector import detecter_technologies
 from modules.endpoint_discovery import lancer_decouverte_endpoints
@@ -89,18 +88,6 @@ def lancer_scan(domaine):
         print(f"\nECHEC ETAPE 3 : {e}")
         return None
 
-    # ── Catégorisation Cloudflare via ip_meta ──
-    cf_count = 0
-    real_count = 0
-    for entree in sous_domaines_scannes:
-        entree.setdefault("ip_meta", {})
-        for ip in entree["ips"]:
-            is_cf = is_cloudflare(ip)
-            entree["ip_meta"][ip] = {"is_cloudflare": is_cf}
-            if is_cf: cf_count += 1
-            else: real_count += 1
-    print(f"  IPs catégorisées : {cf_count} Cloudflare, {real_count} réelles")
-
     duree = time.time() - debut
     print(f"\nEtape 3 terminée en {duree:.1f}s")
 
@@ -172,11 +159,11 @@ def lancer_scan(domaine):
     try:
         resultat_final = assembler_resultats(domaine, sous_domaines_fuzzes)
     except Exception as e:
-        print(f"\nECHEC ETAPE 5 : {e}")
+        print(f"\nECHEC ETAPE 6 : {e}")
         return None
 
     duree = time.time() - debut
-    print(f"\nEtape 5 terminée en {duree:.1f}s")
+    print(f"\nEtape 6 terminée en {duree:.1f}s")
 
     duree_totale = time.time() - debut_total
     resultat_final["summary"]["total_duration"] = round(duree_totale, 1)

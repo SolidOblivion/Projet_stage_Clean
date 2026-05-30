@@ -53,7 +53,6 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
     from config.settings import PORT_SCANNER_MODE
     from modules.data_mapper import assembler_resultats
     from modules.dns_resolver import resoudre_dns
-    from modules.origin_tracker import is_cloudflare
     from modules.subdomain_discovery import trouver_sous_domaines
     from modules.tech_detector import detecter_technologies
     from modules.endpoint_discovery import lancer_decouverte_endpoints
@@ -140,18 +139,6 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
             f"[PERF][pipeline] step=ports duree={progress['step_duration']}s "
             f"open_ports={total_ports}"
         )
-
-        # ── Catégorisation Cloudflare via ip_meta ──
-        cf_count = 0
-        real_count = 0
-        for entree in sous_domaines_scannes:
-            entree.setdefault("ip_meta", {})
-            for ip in entree["ips"]:
-                is_cf = is_cloudflare(ip)
-                entree["ip_meta"][ip] = {"is_cloudflare": is_cf}
-                if is_cf: cf_count += 1
-                else: real_count += 1
-        print(f"[pipeline] IPs catégorisées : {cf_count} Cloudflare, {real_count} réelles")
 
         # Étape 4 : Technologies
         progress["current_step"] = 4
@@ -323,24 +310,13 @@ def get_all_scans():
     return {"status": "success", "count": len(scans), "data": scans}
 
 
-def enrichir_ip_meta(scan):
-    """Recalcule ip_meta pour les scans historiques sans ce champ."""
-    from modules.origin_tracker import is_cloudflare
-
-    for sd in scan.get("subdomains", []):
-        sd["ip_meta"] = {
-            ip: {"is_cloudflare": is_cloudflare(ip)}
-            for ip in sd.get("ips", [])
-        }
-    return scan
-
 
 @app.get("/api/scans/{scan_id}")
 def get_scan(scan_id: str):
     scan = trouver_scan(scan_id)
     if not scan:
         raise HTTPException(status_code=404, detail=f"Scan {scan_id} introuvable.")
-    return {"status": "success", "data": enrichir_ip_meta(scan)}
+    return {"status": "success", "data": scan}
 
 
 @app.delete("/api/scans/{scan_id}")
