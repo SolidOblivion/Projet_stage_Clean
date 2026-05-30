@@ -1,6 +1,8 @@
 import uuid
 from datetime import datetime, timezone
 
+from modules.origin_tracker import is_cloudflare
+
 
 def calculer_summary(sous_domaines):
     toutes_les_ips = set()
@@ -10,24 +12,24 @@ def calculer_summary(sous_domaines):
 
     total_ports = 0
     for sd in sous_domaines:
-        for ports in sd["ports_par_ip"].values():
+        for ports in sd.get("ports_par_ip", {}).values():
             total_ports += len(ports)
 
     toutes_les_techs = set()
     for sd in sous_domaines:
-        for service in sd["services_web"]:
-            for tech in service["technologies"]:
+        for service in sd.get("services_web", []):
+            for tech in service.get("technologies", []):
                 toutes_les_techs.add(tech)
 
     total_endpoints = 0
     for sd in sous_domaines:
-        for service in sd["services_web"]:
+        for service in sd.get("services_web", []):
             total_endpoints += len(service.get("endpoints", []))
 
     # Compteur CPE : nombre de détections avec un CPE valide
     total_cpe_matches = 0
     for sd in sous_domaines:
-        for service in sd["services_web"]:
+        for service in sd.get("services_web", []):
             for detail in service.get("technology_details", []):
                 if detail.get("cpe_status") == "matched":
                     total_cpe_matches += 1
@@ -44,22 +46,34 @@ def calculer_summary(sous_domaines):
 
 def nettoyer_sous_domaine(sd):
     services_web = []
-    for service in sd["services_web"]:
+    for service in sd.get("services_web", []):
         service_propre = dict(service)
         service_propre.pop("_html_cache", None)
         services_web.append(service_propre)
 
-    return {
+    resultat = {
         "subdomain": sd["subdomain"],
         "ips": sd["ips"],
         "dns": {
-            "mx": sd["mx"],
-            "ns": sd["ns"],
-            "cname": sd["cname"],
+            "mx": sd.get("mx", []),
+            "ns": sd.get("ns", []),
+            "cname": sd.get("cname"),
         },
-        "ports_par_ip": sd["ports_par_ip"],
+        "ports_par_ip": sd.get("ports_par_ip", {}),
         "services_web": services_web,
     }
+
+    # Toujours recalculer ip_meta à partir des IPs (source de vérité unique)
+    resultat["ip_meta"] = {
+        ip: {"is_cloudflare": is_cloudflare(ip)}
+        for ip in sd.get("ips", [])
+    }
+
+    # Préserver le champ tags (optionnel — présent sur les entrées ORIGIN_SERVER)
+    if "tags" in sd:
+        resultat["tags"] = sd["tags"]
+
+    return resultat
 
 
 def collecter_cpe_matches(sous_domaines):

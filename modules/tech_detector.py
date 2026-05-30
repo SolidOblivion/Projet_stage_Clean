@@ -23,6 +23,7 @@ from bs4 import BeautifulSoup
 from config.settings import SHARE_HTML_WITH_ENDPOINT_DISCOVERY, TECH_HTTP_TIMEOUT
 from modules.signatures.web_signatures import WEB_SIGNATURES
 from modules.signatures.cpe_mapper import generer_cpe, determiner_cpe_status
+from modules.origin_tracker import is_cloudflare
 
 # ──────────────────────────────────────────────────────────────
 # CONSTANTES
@@ -573,6 +574,24 @@ async def visiter_service_async(session, sous_domaine, port, ssl_ctx):
                 "technology_details": technology_details,
             }
 
+            # ── Détection IPs origine leakées via headers HTTP ──
+            # Certains serveurs derrière Cloudflare exposent l'IP réelle
+            # dans ces headers. On collecte les IPs non-Cloudflare uniquement.
+            ORIGIN_HEADERS = [
+                "X-Forwarded-For", "X-Origin-IP",
+                "X-Real-IP", "CF-Connecting-IP",
+            ]
+            for header in ORIGIN_HEADERS:
+                header_val = reponse.headers.get(header, "")
+                if not header_val:
+                    continue
+                candidate_ip = header_val.split(",")[0].strip()
+                if candidate_ip and not is_cloudflare(candidate_ip):
+                    if "leaked_origin_ips" not in service:
+                        service["leaked_origin_ips"] = []
+                    if candidate_ip not in service["leaked_origin_ips"]:
+                        service["leaked_origin_ips"].append(candidate_ip)
+
             content_type = reponse.headers.get("Content-Type", "")
             if (
                 SHARE_HTML_WITH_ENDPOINT_DISCOVERY
@@ -656,17 +675,20 @@ async def detecter_technologies(sous_domaines_scannes):
             else:
                 print("     aucun port web ouvert")
 
-            resultats.append(
-                {
-                    "subdomain": sous_domaine,
-                    "ips": entree["ips"],
-                    "mx": entree["mx"],
-                    "ns": entree["ns"],
-                    "cname": entree["cname"],
-                    "ports_par_ip": ports_par_ip,
-                    "services_web": services_web,
-                }
-            )
+            entree_enrichie = {
+                "subdomain": sous_domaine,
+                "ips": entree["ips"],
+                "mx": entree["mx"],
+                "ns": entree["ns"],
+                "cname": entree["cname"],
+                "ports_par_ip": ports_par_ip,
+                "services_web": services_web,
+            }
+            if "ip_meta" in entree:
+                entree_enrichie["ip_meta"] = entree["ip_meta"]
+            resultats.append(entree_enrichie)
 
     print(f"\nDétection terminée pour {len(resultats)} sous-domaines")
     return resultats
+
+# Trigger reload

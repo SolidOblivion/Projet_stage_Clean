@@ -317,9 +317,29 @@ function renderModalContent(data) {
         h4.appendChild(icon);
         h4.appendChild(document.createTextNode(' ' + sd.subdomain));
 
+        // Badge ORIGIN_SERVER (entrées leaked-origin découvertes via headers HTTP)
+        if (sd.tags && sd.tags.includes('ORIGIN_SERVER')) {
+            const originBadge = document.createElement('span');
+            originBadge.className = 'badge-origin';
+            originBadge.title = 'IP serveur origine découverte via headers HTTP (derrière Cloudflare)';
+            const shieldIcon = document.createElement('i');
+            shieldIcon.className = 'ph ph-shield-warning';
+            originBadge.appendChild(shieldIcon);
+            originBadge.appendChild(document.createTextNode(' ORIGIN SERVER'));
+            h4.appendChild(originBadge);
+        }
+
         const ipsSpan = document.createElement('span');
         ipsSpan.className = 'sd-ips';
-        ipsSpan.textContent = (sd.ips || []).join(' • ');
+        const ipElements = (sd.ips || []).map(ip => {
+            const isCf = sd.ip_meta?.[ip]?.is_cloudflare ?? false;
+            if (isCf) {
+                return `<span class="badge-cf" title="IP Cloudflare (Proxy)"><i class="ph ph-cloud"></i> ${ip}</span>`;
+            } else {
+                return `<span class="badge-real" title="IP Réelle"><i class="ph ph-server"></i> ${ip}</span>`;
+            }
+        });
+        ipsSpan.innerHTML = ipElements.join('');
 
         header.appendChild(h4);
         header.appendChild(ipsSpan);
@@ -493,6 +513,31 @@ function renderModalContent(data) {
                 }
                 techRow.appendChild(techTags);
                 wbBody.appendChild(techRow);
+
+                // Leaked Origin IPs (IPs réelles derrière Cloudflare découvertes via headers)
+                if (sw.leaked_origin_ips && sw.leaked_origin_ips.length) {
+                    const leakRow = document.createElement('div');
+                    leakRow.className = 'info-row';
+                    const leakLabel = document.createElement('span');
+                    leakLabel.className = 'info-label';
+                    leakLabel.textContent = 'Origine';
+                    leakRow.appendChild(leakLabel);
+
+                    const leakTags = document.createElement('div');
+                    leakTags.className = 'tags';
+                    sw.leaked_origin_ips.forEach(ip => {
+                        const tag = document.createElement('span');
+                        tag.className = 'tag-leaked-ip';
+                        tag.title = 'IP serveur origine leakée via headers HTTP';
+                        const si = document.createElement('i');
+                        si.className = 'ph ph-shield-warning';
+                        tag.appendChild(si);
+                        tag.appendChild(document.createTextNode(' ' + ip));
+                        leakTags.appendChild(tag);
+                    });
+                    leakRow.appendChild(leakTags);
+                    wbBody.appendChild(leakRow);
+                }
 
                 // Endpoints
                 if (sw.endpoints && sw.endpoints.length) {

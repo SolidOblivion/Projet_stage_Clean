@@ -7,6 +7,7 @@ import time
 from config.settings import PORT_SCANNER_MODE
 from modules.data_mapper import assembler_resultats
 from modules.dns_resolver import resoudre_dns
+from modules.origin_tracker import is_cloudflare
 from modules.subdomain_discovery import trouver_sous_domaines
 from modules.tech_detector import detecter_technologies
 from modules.endpoint_discovery import lancer_decouverte_endpoints
@@ -82,12 +83,23 @@ def lancer_scan(domaine):
     print("-" * 70)
 
     debut = time.time()
-
     try:
         sous_domaines_scannes = scanner_ports(sous_domaines_resolus)
     except Exception as e:
         print(f"\nECHEC ETAPE 3 : {e}")
         return None
+
+    # ── Catégorisation Cloudflare via ip_meta ──
+    cf_count = 0
+    real_count = 0
+    for entree in sous_domaines_scannes:
+        entree.setdefault("ip_meta", {})
+        for ip in entree["ips"]:
+            is_cf = is_cloudflare(ip)
+            entree["ip_meta"][ip] = {"is_cloudflare": is_cf}
+            if is_cf: cf_count += 1
+            else: real_count += 1
+    print(f"  IPs catégorisées : {cf_count} Cloudflare, {real_count} réelles")
 
     duree = time.time() - debut
     print(f"\nEtape 3 terminée en {duree:.1f}s")
@@ -108,6 +120,33 @@ def lancer_scan(domaine):
 
     duree = time.time() - debut
     print(f"\nEtape 4 terminée en {duree:.1f}s")
+
+    # ── Agrégation des IPs origine leakées via headers HTTP ──
+    leaked_ips = set()
+    all_dns_ips = {ip for sd in sous_domaines_scannes for ip in sd.get("ips", [])}
+    for sd in sous_domaines_enrichis:
+        for service in sd.get("services_web", []):
+            for ip in service.get("leaked_origin_ips", []):
+                if ip not in all_dns_ips:
+                    leaked_ips.add(ip)
+
+    if leaked_ips:
+        print(f"\n[pipeline] {len(leaked_ips)} IP(s) origine leakée(s) : {leaked_ips}")
+        leaked_entries = [
+            {"subdomain": f"leaked-origin/{ip}", "ips": [ip],
+             "mx": [], "ns": [], "cname": None}
+            for ip in leaked_ips
+        ]
+        try:
+            leaked_scannes = scanner_ports(leaked_entries)
+            for entry in leaked_scannes:
+                entry["tags"] = ["ORIGIN_SERVER"]
+            sous_domaines_enrichis = sous_domaines_enrichis + leaked_scannes
+            print(f"[pipeline] Scan leaked IPs terminé ({len(leaked_scannes)} entrées)")
+        except Exception as e:
+            print(f"[pipeline] Scan leaked IPs non bloquant : {e}")
+    else:
+        print("\n[pipeline] Aucune IP origine leakée détectée via headers HTTP")
 
     print("\n" + "-" * 70)
     print("  ETAPE 5/6 : Découverte des endpoints")

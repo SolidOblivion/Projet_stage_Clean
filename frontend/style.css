@@ -268,9 +268,11 @@ body {
     display:flex; align-items:center; justify-content:space-between;
     border-bottom:1px solid var(--border);
 }
-.sd-header h4 { font-size:15px; font-weight:700; display:flex; align-items:center; gap:8px; }
-.sd-header h4 i { color:var(--accent); }
-.sd-ips { font-size:12px; color:var(--text2); font-family:monospace; }
+.sd-header h4 { font-size:16px; margin:0; display:flex; align-items:center; gap:8px; font-weight:600; }
+.sd-ips {
+    font-size:13px; color:var(--text3); font-family:monospace;
+    display:flex; gap:6px; flex-wrap:wrap; align-items:center;
+}
 .sd-body { padding:16px 18px; display:flex; flex-direction:column; gap:14px; }
 
 .info-row { display:flex; align-items:flex-start; gap:12px; }
@@ -279,8 +281,37 @@ body {
     letter-spacing:.5px; color:var(--text3); width:100px; flex-shrink:0; padding-top:3px;
 }
 .tags { display:flex; flex-wrap:wrap; gap:6px; }
-.tag-port { background:var(--green-soft); color:var(--green); padding:4px 10px; border-radius:var(--radius-xs); font-size:12px; font-weight:600; font-family:monospace; }
-.tag-tech { background:var(--accent-soft); color:var(--accent); padding:4px 10px; border-radius:var(--radius-xs); font-size:12px; font-weight:600; }
+.tag-port  { background:var(--green-soft); color:var(--green); padding:4px 10px; border-radius:var(--radius-xs); font-size:12px; font-weight:600; font-family:monospace; }
+.tag-tech  { background:var(--accent-soft); color:var(--accent); padding:4px 10px; border-radius:var(--radius-xs); font-size:12px; font-weight:600; }
+.badge-origin {
+    display:inline-flex; align-items:center; gap:4px;
+    background:#fff7ed; color:#c2410c;
+    border:1px solid #fed7aa;
+    padding:2px 8px; border-radius:4px;
+    font-size:10px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.4px; margin-left:8px; vertical-align:middle;
+}
+.tag-leaked-ip {
+    display:inline-flex; align-items:center; gap:5px;
+    background:#fef2f2; color:var(--red);
+    border:1px solid #fca5a5;
+    padding:4px 10px; border-radius:var(--radius-xs);
+    font-size:12px; font-weight:600; font-family:monospace;
+}
+.badge-cf {
+    display:inline-flex; align-items:center; gap:4px;
+    background:#fffbeb; color:#d97706;
+    border:1px solid #fde68a;
+    padding:2px 8px; border-radius:4px;
+    font-size:11px; font-weight:600; font-family:monospace;
+}
+.badge-real {
+    display:inline-flex; align-items:center; gap:4px;
+    background:#fef2f2; color:var(--red);
+    border:1px solid #fca5a5;
+    padding:2px 8px; border-radius:4px;
+    font-size:11px; font-weight:600; font-family:monospace;
+}
 
 .web-block {
     background:var(--bg); border-radius:var(--radius-xs);
