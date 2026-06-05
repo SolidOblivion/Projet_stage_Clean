@@ -8,6 +8,9 @@ const tableBody      = document.getElementById('table-body');
 const btnRefresh     = document.getElementById('btn-refresh');
 const refreshIcon    = document.getElementById('refresh-icon');
 const statsRow       = document.getElementById('stats-row');
+const searchInput    = document.getElementById('search-input');
+
+let cachedScans = [];
 
 const progressPanel  = document.getElementById('progress-panel');
 const progressTarget = document.getElementById('progress-target');
@@ -23,7 +26,18 @@ const modalTitle     = document.getElementById('modal-title');
 const modalBody      = document.getElementById('modal-body');
 
 // ── Init ──
-document.addEventListener('DOMContentLoaded', fetchScans);
+document.addEventListener('DOMContentLoaded', () => {
+    fetchScans();
+    searchInput.addEventListener('input', () => {
+        const query = searchInput.value.trim().toLowerCase();
+        if (!query) {
+            renderTable(cachedScans);
+            return;
+        }
+        const filtered = cachedScans.filter(s => (s.target || '').toLowerCase().includes(query));
+        renderTable(filtered, true);
+    });
+});
 
 // ── Refresh ──
 btnRefresh.addEventListener('click', () => {
@@ -190,9 +204,12 @@ function renderStats(scans) {
 }
 
 // ── Render Table ──
-function renderTable(scans) {
+function renderTable(scans, isFiltered = false) {
+    if (!isFiltered) cachedScans = scans;
     if (!scans.length) {
-        tableBody.innerHTML = '<tr><td colspan="9" class="empty-td">Aucun scan dans l\'historique</td></tr>';
+        tableBody.innerHTML = isFiltered
+            ? '<tr><td colspan="9" class="no-results-row">Aucun résultat trouvé.</td></tr>'
+            : '<tr><td colspan="9" class="empty-td">Aucun scan dans l\'historique</td></tr>';
         return;
     }
     tableBody.innerHTML = '';

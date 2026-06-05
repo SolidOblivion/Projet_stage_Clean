@@ -185,6 +185,23 @@ body {
 }
 .history-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
 .history-header h3 { font-size:17px; font-weight:800; }
+.history-actions { display:flex; align-items:center; gap:8px; }
+.search-wrap {
+    display:flex; align-items:center; gap:8px;
+    background:var(--bg); border:1px solid var(--border);
+    border-radius:var(--radius-sm); padding:0 14px;
+    transition:border-color .2s, box-shadow .2s;
+}
+.search-wrap:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px rgba(124,58,237,.08); }
+.search-wrap i { color:var(--text3); font-size:16px; flex-shrink:0; }
+.search-wrap input {
+    border:none; outline:none; background:transparent;
+    font-family:inherit; font-size:13px; padding:9px 0;
+    color:var(--text); width:180px; transition:width .25s ease;
+}
+.search-wrap input:focus { width:240px; }
+.search-wrap input::placeholder { color:var(--text3); }
+.no-results-row { text-align:center; padding:32px 16px; color:var(--text3); font-size:14px; }
 .btn-ghost {
     background:var(--bg); border:none; color:var(--text);
     width:34px; height:34px; border-radius:50%;

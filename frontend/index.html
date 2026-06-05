@@ -74,9 +74,15 @@
             <section class="history-card">
                 <div class="history-header">
                     <h3>Historique des scans</h3>
-                    <button id="btn-refresh" class="btn-ghost" title="Rafraîchir">
-                        <i class="ph ph-arrows-clockwise" id="refresh-icon"></i>
-                    </button>
+                    <div class="history-actions">
+                        <div class="search-wrap" id="search-wrap">
+                            <i class="ph ph-magnifying-glass"></i>
+                            <input type="text" id="search-input" placeholder="Filtrer par domaine…" autocomplete="off">
+                        </div>
+                        <button id="btn-refresh" class="btn-ghost" title="Rafraîchir">
+                            <i class="ph ph-arrows-clockwise" id="refresh-icon"></i>
+                        </button>
+                    </div>
                 </div>
                 <table class="scan-table">
                     <thead>
