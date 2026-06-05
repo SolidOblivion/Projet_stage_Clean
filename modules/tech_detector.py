@@ -45,6 +45,15 @@ HEADERS_NAVIGATEUR = {
     "Chrome/120.0.0.0 Safari/537.36"
 }
 
+ORIGIN_HEADERS = [
+    "X-Forwarded-For",   # rare : serveurs qui reflètent les headers de requête
+    "X-Origin-IP",
+    "X-Real-IP",
+    "CF-Connecting-IP",
+    "X-Backend-Server",  # expose hostname/IP du backend origine
+    "X-Served-By",       # expose IP du nœud réel derrière le CDN
+]
+
 MAX_RESPONSE_SIZE = 500_000
 
 # Longueur max d'une version extraite (défense en profondeur)
@@ -577,10 +586,6 @@ async def visiter_service_async(session, sous_domaine, port, ssl_ctx):
             # ── Détection IPs origine leakées via headers HTTP ──
             # Certains serveurs derrière Cloudflare exposent l'IP réelle
             # dans ces headers. On collecte les IPs non-Cloudflare uniquement.
-            ORIGIN_HEADERS = [
-                "X-Forwarded-For", "X-Origin-IP",
-                "X-Real-IP", "CF-Connecting-IP",
-            ]
             for header in ORIGIN_HEADERS:
                 header_val = reponse.headers.get(header, "")
                 if not header_val:

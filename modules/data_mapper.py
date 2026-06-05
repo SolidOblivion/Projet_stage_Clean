@@ -113,8 +113,8 @@ def assembler_resultats(domaine, sous_domaines):
     print(f"\nAssemblage des résultats pour : {domaine}")
 
     sous_domaines_propres = [nettoyer_sous_domaine(sd) for sd in sous_domaines]
-    summary = calculer_summary(sous_domaines)
-    cpe_matches = collecter_cpe_matches(sous_domaines)
+    summary = calculer_summary(sous_domaines_propres)
+    cpe_matches = collecter_cpe_matches(sous_domaines_propres)
 
     resultat_final = {
         "scan_id": str(uuid.uuid4()),
