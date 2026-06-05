@@ -10,10 +10,12 @@ def calculer_summary(sous_domaines):
         for ip in sd["ips"]:
             toutes_les_ips.add(ip)
 
-    total_ports = 0
+    ports_par_ip_global = {}
     for sd in sous_domaines:
-        for ports in sd.get("ports_par_ip", {}).values():
-            total_ports += len(ports)
+        for ip, ports in sd.get("ports_par_ip", {}).items():
+            if ip not in ports_par_ip_global:
+                ports_par_ip_global[ip] = ports
+    total_ports = sum(len(ports) for ports in ports_par_ip_global.values())
 
     toutes_les_techs = set()
     for sd in sous_domaines:
