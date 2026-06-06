@@ -130,10 +130,12 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
         debut = t.time()
         sous_domaines_scannes = scanner_ports_local(sous_domaines_resolus)
         progress["step_duration"] = round(t.time() - debut, 1)
-        total_ports = sum(
-            len(ports) for sd in sous_domaines_scannes
-            for ports in sd.get("ports_par_ip", {}).values()
-        )
+        ports_par_ip_vus = {}
+        for sd in sous_domaines_scannes:
+            for ip, ports in sd.get("ports_par_ip", {}).items():
+                if ip not in ports_par_ip_vus:
+                    ports_par_ip_vus[ip] = ports
+        total_ports = sum(len(p) for p in ports_par_ip_vus.values())
         progress["details"] = f"{total_ports} ports ouverts trouvés"
         print(
             f"[PERF][pipeline] step=ports duree={progress['step_duration']}s "

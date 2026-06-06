@@ -18,7 +18,9 @@ import ssl
 from urllib.parse import urlsplit, urlunsplit
 
 import aiohttp
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+import warnings
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 from config.settings import SHARE_HTML_WITH_ENDPOINT_DISCOVERY, TECH_HTTP_TIMEOUT
 from modules.signatures.web_signatures import WEB_SIGNATURES
