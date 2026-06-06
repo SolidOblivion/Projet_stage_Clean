@@ -13,6 +13,7 @@ from config.settings import (
     CRAWL_PRIORITY_PATH_HINTS,
     CRAWL_STATIC_PATH_PREFIXES,
     CRAWL_TIMEOUT,
+    FUZZ_CONCURRENCY,
     MAX_CRAWL_DEPTH,
     MAX_CRAWL_PAGES,
     MAX_CRAWL_RESPONSE_SIZE,
@@ -437,7 +438,8 @@ async def decouvrir_endpoints_async(sous_domaines_enrichis):
     debut_global = time.perf_counter()
     print("\nDecouverte des endpoints (Fuzzing + Crawling)...")
     ssl_ctx = creer_contexte_ssl_permissif()
-    semaphore = asyncio.Semaphore(CRAWL_CONCURRENCY)
+    fuzz_semaphore = asyncio.Semaphore(FUZZ_CONCURRENCY)
+    crawl_semaphore = asyncio.Semaphore(CRAWL_CONCURRENCY)
     total_trouves = 0
     crawled_base_urls = {}
 
@@ -457,13 +459,23 @@ async def decouvrir_endpoints_async(sous_domaines_enrichis):
                 debut_service = time.perf_counter()
                 endpoints = []
                 try:
-                    fuzzing = await fuzzer_endpoints(session, service, ssl_ctx, semaphore)
+                    fuzzing = await fuzzer_endpoints(
+                        session,
+                        service,
+                        ssl_ctx,
+                        fuzz_semaphore,
+                    )
                     base_url = normaliser_url(service.get("final_url") or service.get("url"))
                     if base_url and base_url in crawled_base_urls:
                         crawling = [dict(endpoint) for endpoint in crawled_base_urls[base_url]]
                         print(f"        [crawler] cache inter-domaines reutilise : {base_url}")
                     else:
-                        crawling = await crawler_endpoints(session, service, ssl_ctx, semaphore)
+                        crawling = await crawler_endpoints(
+                            session,
+                            service,
+                            ssl_ctx,
+                            crawl_semaphore,
+                        )
                         if base_url:
                             crawled_base_urls[base_url] = [
                                 dict(endpoint) for endpoint in crawling

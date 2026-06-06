@@ -50,6 +50,7 @@ CERTSPOTTER_RETRIES = int(os.getenv("CERTSPOTTER_RETRIES", 2))
 MAX_CRAWL_DEPTH = int(os.getenv("MAX_CRAWL_DEPTH", 2))
 MAX_CRAWL_PAGES = int(os.getenv("MAX_CRAWL_PAGES", 30))
 CRAWL_CONCURRENCY = int(os.getenv("CRAWL_CONCURRENCY", 10))
+FUZZ_CONCURRENCY = int(os.getenv("FUZZ_CONCURRENCY", 16))
 CRAWL_TIMEOUT = float(os.getenv("CRAWL_TIMEOUT", 5))
 CRAWL_HEAD_TIMEOUT = float(
     os.getenv("CRAWL_HEAD_TIMEOUT", min(CRAWL_TIMEOUT, max(float(TIMEOUT), 2.0)))
@@ -1191,6 +1192,8 @@ SUBDOMAINS_WORDLIST = [
     "resellers",
     "ressources",
     "rest",
+    "resultats",
+    "resultat",
     "revistas",
     "rh",
     "rm",
