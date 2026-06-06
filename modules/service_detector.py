@@ -7,8 +7,8 @@ from config.settings import BANNER_TIMEOUT, BANNER_CONCURRENCY
 PATTERNS = [
     (re.compile(r"^SSH-[\d.]+-(\S+)"), "ssh", 1),
     (re.compile(r"^220[\s-].*?(ProFTPD|vsftpd|FileZilla|Pure-FTPd)[^\d]*([\d.]+)?", re.IGNORECASE), "ftp", 2),
-    (re.compile(r"^220\s.*?(Postfix|Sendmail|Exim|Exchange|MailEnable)[^\d]*([\d.]+)?", re.IGNORECASE), "smtp", 2),
-    (re.compile(r"^220\s+\S+\s+(ESMTP|SMTP)", re.IGNORECASE), "smtp", None),
+    (re.compile(r"^220[\s-].*?(Postfix|Sendmail|Exim|Exchange|MailEnable)[^\d]*([\d.]+)?", re.IGNORECASE), "smtp", 2),
+    (re.compile(r"^220[\s-]+\S+[\s-]+(ESMTP|SMTP)", re.IGNORECASE), "smtp", None),
     (re.compile(r"^\+OK\s+(.*?)\s+ready", re.IGNORECASE), "pop3", 1),
     (re.compile(r"^\* OK\s+(.*?)\s+(IMAP\s+)?ready", re.IGNORECASE), "imap", 1),
     (re.compile(r"^(\+PONG|-ERR)"), "redis", None),
