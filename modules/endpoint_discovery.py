@@ -439,6 +439,7 @@ async def decouvrir_endpoints_async(sous_domaines_enrichis):
     ssl_ctx = creer_contexte_ssl_permissif()
     semaphore = asyncio.Semaphore(CRAWL_CONCURRENCY)
     total_trouves = 0
+    crawled_base_urls = {}
 
     connector = aiohttp.TCPConnector(
         resolver=aiohttp.resolver.ThreadedResolver()
@@ -457,7 +458,16 @@ async def decouvrir_endpoints_async(sous_domaines_enrichis):
                 endpoints = []
                 try:
                     fuzzing = await fuzzer_endpoints(session, service, ssl_ctx, semaphore)
-                    crawling = await crawler_endpoints(session, service, ssl_ctx, semaphore)
+                    base_url = normaliser_url(service.get("final_url") or service.get("url"))
+                    if base_url and base_url in crawled_base_urls:
+                        crawling = [dict(endpoint) for endpoint in crawled_base_urls[base_url]]
+                        print(f"        [crawler] cache inter-domaines reutilise : {base_url}")
+                    else:
+                        crawling = await crawler_endpoints(session, service, ssl_ctx, semaphore)
+                        if base_url:
+                            crawled_base_urls[base_url] = [
+                                dict(endpoint) for endpoint in crawling
+                            ]
                     endpoints = fusionner_endpoints(fuzzing, crawling)
                 except Exception as e:
                     print(
