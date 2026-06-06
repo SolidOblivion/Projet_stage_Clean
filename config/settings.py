@@ -28,7 +28,7 @@ MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 MONGO_DB = os.getenv("MONGO_DB", "asm_project")
 
 TIMEOUT = int(os.getenv("TIMEOUT", 3))
-TECH_HTTP_TIMEOUT = float(os.getenv("TECH_HTTP_TIMEOUT", 10))
+TECH_HTTP_TIMEOUT = float(os.getenv("TECH_HTTP_TIMEOUT", 6))
 MAX_PORTS = int(os.getenv("MAX_PORTS", 1000))
 THREADS = int(os.getenv("THREADS", 10))
 MAX_SUBDOMAINS = int(os.getenv("MAX_SUBDOMAINS", 100))

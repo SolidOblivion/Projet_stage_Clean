@@ -39,6 +39,16 @@ PORTS_WEB = {
     5000: "http-dev",
 }
 
+# Timeout adaptatif : ports standards -> timeout plein,
+# ports alternatifs -> timeout court (rarement actifs, evite les longues attentes)
+PORTS_TIMEOUT_OVERRIDE = {
+    8080: 3.0,
+    8443: 3.0,
+    8888: 3.0,
+    3000: 3.0,
+    5000: 3.0,
+}
+
 HEADERS_NAVIGATEUR = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
     "AppleWebKit/537.36 (KHTML, like Gecko) "
@@ -558,10 +568,12 @@ async def visiter_service_async(session, sous_domaine, port, ssl_ctx):
     if port == 443:
         url = f"https://{sous_domaine}"
 
+    timeout_port = PORTS_TIMEOUT_OVERRIDE.get(port, TECH_HTTP_TIMEOUT)
+
     try:
         async with session.get(
             url,
-            timeout=aiohttp.ClientTimeout(total=TECH_HTTP_TIMEOUT),
+            timeout=aiohttp.ClientTimeout(total=timeout_port),
             ssl=ssl_ctx,
             allow_redirects=True,
             headers=HEADERS_NAVIGATEUR,
@@ -614,7 +626,7 @@ async def visiter_service_async(session, sous_domaine, port, ssl_ctx):
     except Exception as e:
         print(
             f"     {url} : {type(e).__name__} {repr(e)} "
-            f"(timeout={TECH_HTTP_TIMEOUT}s)"
+            f"(timeout={timeout_port}s)"
         )
         return None
 
