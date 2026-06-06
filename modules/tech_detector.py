@@ -646,11 +646,13 @@ async def detecter_technologies(sous_domaines_scannes):
 
             print(f"\n  {sous_domaine}")
 
-            taches_ports = []
+            ports_a_visiter = set()
             for ports in ports_par_ip.values():
                 for port_info in ports:
                     if port_info["port"] in PORTS_WEB:
-                        taches_ports.append(port_info["port"])
+                        ports_a_visiter.add(port_info["port"])
+
+            taches_ports = sorted(ports_a_visiter)
 
             services_web = []
             urls_finales_visitees = set()
