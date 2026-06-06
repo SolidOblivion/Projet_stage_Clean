@@ -10,6 +10,7 @@ from modules.dns_resolver import resoudre_dns
 from modules.subdomain_discovery import trouver_sous_domaines
 from modules.tech_detector import detecter_technologies
 from modules.endpoint_discovery import lancer_decouverte_endpoints
+from modules.service_detector import detecter_services
 
 
 def scanner_ports(sous_domaines_resolus):
@@ -37,7 +38,7 @@ def lancer_scan(domaine):
     debut_total = time.time()
 
     print("\n" + "-" * 70)
-    print("  ETAPE 1/6 : Découverte des sous-domaines")
+    print("  ETAPE 1/7 : Découverte des sous-domaines")
     print("-" * 70)
 
     debut = time.time()
@@ -56,7 +57,7 @@ def lancer_scan(domaine):
     print(f"\nEtape 1 terminée en {duree:.1f}s : {len(sous_domaines)} sous-domaines")
 
     print("\n" + "-" * 70)
-    print("  ETAPE 2/6 : Résolution DNS")
+    print("  ETAPE 2/7 : Résolution DNS")
     print("-" * 70)
 
     debut = time.time()
@@ -78,7 +79,7 @@ def lancer_scan(domaine):
     )
 
     print("\n" + "-" * 70)
-    print("  ETAPE 3/6 : Scan des ports")
+    print("  ETAPE 3/7 : Scan des ports")
     print("-" * 70)
 
     debut = time.time()
@@ -92,7 +93,19 @@ def lancer_scan(domaine):
     print(f"\nEtape 3 terminée en {duree:.1f}s")
 
     print("\n" + "-" * 70)
-    print("  ETAPE 4/6 : Détection des technologies")
+    print("  ETAPE 4/7 : Détection des services (banner grabbing)")
+    print("-" * 70)
+    debut = time.time()
+    try:
+        sous_domaines_scannes = detecter_services(sous_domaines_scannes)
+    except Exception as e:
+        print(f"\nECHEC ETAPE 4 : {e}")
+        return None
+    duree = time.time() - debut
+    print(f"\nEtape 4 terminée en {duree:.1f}s")
+
+    print("\n" + "-" * 70)
+    print("  ETAPE 5/7 : Détection des technologies")
     print("-" * 70)
 
     debut = time.time()
@@ -102,11 +115,11 @@ def lancer_scan(domaine):
             detecter_technologies(sous_domaines_scannes)
         )
     except Exception as e:
-        print(f"\nECHEC ETAPE 4 : {e}")
+        print(f"\nECHEC ETAPE 5 : {e}")
         return None
 
     duree = time.time() - debut
-    print(f"\nEtape 4 terminée en {duree:.1f}s")
+    print(f"\nEtape 5 terminée en {duree:.1f}s")
 
     # ── Agrégation des IPs origine leakées via headers HTTP ──
     leaked_ips = set()
@@ -136,7 +149,7 @@ def lancer_scan(domaine):
         print("\n[pipeline] Aucune IP origine leakée détectée via headers HTTP")
 
     print("\n" + "-" * 70)
-    print("  ETAPE 5/6 : Découverte des endpoints")
+    print("  ETAPE 6/7 : Découverte des endpoints")
     print("-" * 70)
 
     debut = time.time()
@@ -144,14 +157,14 @@ def lancer_scan(domaine):
     try:
         sous_domaines_fuzzes = lancer_decouverte_endpoints(sous_domaines_enrichis)
     except Exception as e:
-        print(f"\nECHEC ETAPE 5 : {e}")
+        print(f"\nECHEC ETAPE 6 : {e}")
         return None
 
     duree = time.time() - debut
-    print(f"\nEtape 5 terminée en {duree:.1f}s")
+    print(f"\nEtape 6 terminée en {duree:.1f}s")
 
     print("\n" + "-" * 70)
-    print("  ETAPE 6/6 : Assemblage des résultats")
+    print("  ETAPE 7/7 : Assemblage des résultats")
     print("-" * 70)
 
     debut = time.time()
@@ -159,11 +172,11 @@ def lancer_scan(domaine):
     try:
         resultat_final = assembler_resultats(domaine, sous_domaines_fuzzes)
     except Exception as e:
-        print(f"\nECHEC ETAPE 6 : {e}")
+        print(f"\nECHEC ETAPE 7 : {e}")
         return None
 
     duree = time.time() - debut
-    print(f"\nEtape 6 terminée en {duree:.1f}s")
+    print(f"\nEtape 7 terminée en {duree:.1f}s")
 
     duree_totale = time.time() - debut_total
     resultat_final["summary"]["total_duration"] = round(duree_totale, 1)

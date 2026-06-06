@@ -56,6 +56,7 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
     from modules.subdomain_discovery import trouver_sous_domaines
     from modules.tech_detector import detecter_technologies
     from modules.endpoint_discovery import lancer_decouverte_endpoints
+    from modules.service_detector import detecter_services
     import platform, asyncio
 
     # Déterminer le nombre de ports selon le mode
@@ -76,9 +77,10 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
         "Découverte des sous-domaines",
         "Résolution DNS",
         "Scan des ports",
+        "Détection des services",
         "Détection des technologies",
         "Découverte des endpoints",
-        "Assemblage et sauvegarde"
+        "Assemblage et sauvegarde",
     ]
 
     progress = active_scans[task_id]
@@ -142,9 +144,30 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
             f"open_ports={total_ports}"
         )
 
-        # Étape 4 : Technologies
+        # Étape 4 : Détection des services
         progress["current_step"] = 4
         progress["step_name"] = steps[3]
+        progress["details"] = "Banner grabbing sur les ports unknown..."
+        debut = t.time()
+        sous_domaines_scannes = detecter_services(sous_domaines_scannes)
+        progress["step_duration"] = round(t.time() - debut, 1)
+        total_identifies = sum(
+            1
+            for sd in sous_domaines_scannes
+            for ports in sd.get("ports_par_ip", {}).values()
+            for p in ports
+            if p.get("banner") is not None and p.get("service") != "unknown"
+        )
+        progress["details"] = f"{total_identifies} services identifiés par bannière"
+        print(
+            f"[PERF][pipeline] step=service_detector"
+            f" duree={progress['step_duration']}s"
+            f" identifies={total_identifies}"
+        )
+
+        # Étape 5 : Technologies
+        progress["current_step"] = 5
+        progress["step_name"] = steps[4]
         progress["details"] = ""
         debut = t.time()
         sous_domaines_enrichis = asyncio.run(
@@ -192,9 +215,9 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
         else:
             print("[pipeline] Aucune IP origine leakée détectée")
 
-        # Étape 5 : Endpoints
-        progress["current_step"] = 5
-        progress["step_name"] = steps[4]
+        # Étape 6 : Endpoints
+        progress["current_step"] = 6
+        progress["step_name"] = steps[5]
         progress["details"] = ""
         debut = t.time()
         sous_domaines_fuzzes = lancer_decouverte_endpoints(sous_domaines_enrichis)
@@ -209,9 +232,9 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
             f"endpoints={total_endpoints}"
         )
 
-        # Étape 6 : Assemblage
-        progress["current_step"] = 6
-        progress["step_name"] = steps[5]
+        # Étape 7 : Assemblage
+        progress["current_step"] = 7
+        progress["step_name"] = steps[6]
         progress["details"] = ""
         debut = t.time()
         resultat_final = assembler_resultats(domaine, sous_domaines_fuzzes)
@@ -261,7 +284,7 @@ def start_scan(request: ScanRequest):
         "mode": mode,
         "status": "starting",
         "current_step": 0,
-        "total_steps": 6,
+        "total_steps": 7,
         "step_name": "Initialisation...",
         "details": "",
         "step_duration": 0,
