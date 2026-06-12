@@ -46,6 +46,12 @@ SUBDOMAIN_DNS_NAMESERVERS = [
     if item.strip()
 ]
 
+# ── IA Security Analyst ──
+AI_PROVIDER = os.getenv("AI_PROVIDER", "openai").strip().lower()
+AI_MODEL = os.getenv("AI_MODEL", "gpt-4o").strip()
+AI_API_KEY = os.getenv("AI_API_KEY", "").strip()
+AI_BASE_URL = os.getenv("AI_BASE_URL", "https://api.openai.com/v1").strip().rstrip("/")
+
 HACKERTARGET_TIMEOUT = float(os.getenv("HACKERTARGET_TIMEOUT", 10))
 CERTSPOTTER_TIMEOUT = float(os.getenv("CERTSPOTTER_TIMEOUT", 10))
 CERTSPOTTER_RETRIES = int(os.getenv("CERTSPOTTER_RETRIES", 2))
