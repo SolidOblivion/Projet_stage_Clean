@@ -80,24 +80,32 @@ function startLiveTracking(taskId, target, mode) {
     progressPanel.classList.remove('hidden', 'done', 'error');
     progressTarget.textContent = `${target} — ${modeLabel}`;
     progressBar.style.width = '0%';
-    progressBadge.textContent = 'Étape 0/6';
+    progressBadge.textContent = 'Étape 0/8';
     progressName.textContent = 'Connexion...';
     progressDetail.textContent = '';
 
+    // Les dots sont créés dynamiquement selon total_steps du serveur
     progressSteps.innerHTML = '';
-    for (let i = 0; i < 6; i++) {
-        const d = document.createElement('div');
-        d.className = 'step-dot';
-        d.id = `dot-${i}`;
-        progressSteps.appendChild(d);
-    }
+    let dotsCreated = 0;
 
     const evtSource = new EventSource(`/api/scans/stream/${taskId}`);
     evtSource.onmessage = (event) => {
         const d = JSON.parse(event.data);
         const step = d.current_step || 0;
-        const total = d.total_steps || 6;
+        const total = d.total_steps || 8;
         const pct = Math.round((step / total) * 100);
+
+        // Créer les dots une seule fois quand on connaît le total
+        if (dotsCreated !== total) {
+            progressSteps.innerHTML = '';
+            for (let i = 0; i < total; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'step-dot';
+                dot.id = `dot-${i}`;
+                progressSteps.appendChild(dot);
+            }
+            dotsCreated = total;
+        }
 
         progressBar.style.width = pct + '%';
         progressBadge.textContent = `Étape ${step}/${total}`;
@@ -156,7 +164,6 @@ function renderStats(scans) {
         statsRow.innerHTML = '';
         return;
     }
-    // Le dernier scan est le premier dans la liste (tri par date décroissante depuis MongoDB)
     const last = scans[0];
     const s = last.summary || {};
     const mode = last.mode || 'quick';
@@ -284,6 +291,156 @@ async function openModal(id) {
     }
 }
 
+// ── Lightweight Markdown → HTML ──
+function markdownToHtml(md) {
+    if (!md) return '';
+    let html = md
+        // Escape HTML entities first
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        // Code blocks (``` ... ```)
+        .replace(/```([\s\S]*?)```/g, '<pre class="ai-code">$1</pre>')
+        // Inline code
+        .replace(/`([^`]+)`/g, '<code class="ai-inline-code">$1</code>')
+        // Headers
+        .replace(/^### (.+)$/gm, '<h5 class="ai-h3">$1</h5>')
+        .replace(/^## (.+)$/gm, '<h4 class="ai-h2">$1</h4>')
+        .replace(/^# (.+)$/gm, '<h3 class="ai-h1">$1</h3>')
+        // Bold
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        // Italic
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        // Severity emojis → styled badges
+        .replace(/🔴\s*(CRITIQUE|NIVEAU DE RISQUE GLOBAL\s*:\s*CRITIQUE)/g, '<span class="ai-sev ai-sev-crit">🔴 $1</span>')
+        .replace(/🔴/g, '<span class="ai-sev ai-sev-crit">🔴</span>')
+        .replace(/🟠/g, '<span class="ai-sev ai-sev-high">🟠</span>')
+        .replace(/🟡/g, '<span class="ai-sev ai-sev-med">🟡</span>')
+        .replace(/⚪/g, '<span class="ai-sev ai-sev-low">⚪</span>')
+        .replace(/🔍/g, '<span class="ai-sev ai-sev-info">🔍</span>')
+        .replace(/⛓/g, '<span class="ai-sev ai-sev-chain">⛓</span>')
+        // Horizontal rules
+        .replace(/^-{3,}$/gm, '<hr class="ai-hr">')
+        .replace(/^─{3,}$/gm, '<hr class="ai-hr">')
+        // Bullet lists
+        .replace(/^\s*[-*]\s+(.+)$/gm, '<li>$1</li>')
+        // Numbered lists
+        .replace(/^\s*\d+\.\s+(.+)$/gm, '<li class="ai-ol">$1</li>')
+        // Paragraphs (double newline)
+        .replace(/\n\n/g, '</p><p>')
+        // Single newlines within paragraphs
+        .replace(/\n/g, '<br>');
+
+    // Wrap consecutive <li> in <ul>
+    html = html.replace(/(<li>.*?<\/li>(?:<br>)?)+/g, (match) => {
+        return '<ul class="ai-list">' + match.replace(/<br>/g, '') + '</ul>';
+    });
+    html = html.replace(/(<li class="ai-ol">.*?<\/li>(?:<br>)?)+/g, (match) => {
+        return '<ol class="ai-list">' + match.replace(/<br>/g, '').replace(/ class="ai-ol"/g, '') + '</ol>';
+    });
+
+    return '<p>' + html + '</p>';
+}
+
+// ── AI Analysis Section ──
+function renderAiAnalysis(data, container) {
+    const scanId = data.scan_id;
+    const analysis = data.ai_analysis;
+
+    const aiBlock = document.createElement('div');
+    aiBlock.className = 'ai-analysis-block';
+    aiBlock.id = 'ai-analysis-block';
+
+    // Header
+    const aiHeader = document.createElement('div');
+    aiHeader.className = 'ai-analysis-header';
+
+    const aiTitle = document.createElement('div');
+    aiTitle.className = 'ai-analysis-title';
+    const brainIcon = document.createElement('i');
+    brainIcon.className = 'ph ph-brain';
+    aiTitle.appendChild(brainIcon);
+    aiTitle.appendChild(document.createTextNode(' Analyse de sécurité IA'));
+    aiHeader.appendChild(aiTitle);
+
+    if (analysis && analysis.report && !analysis.error) {
+        // Analyse disponible — afficher le rapport
+        const metaSpan = document.createElement('span');
+        metaSpan.className = 'ai-analysis-meta';
+        metaSpan.textContent = `${analysis.provider}/${analysis.model} — ${analysis.duration}s`;
+        aiHeader.appendChild(metaSpan);
+
+        aiBlock.appendChild(aiHeader);
+
+        const aiContent = document.createElement('div');
+        aiContent.className = 'ai-analysis-content';
+        aiContent.innerHTML = markdownToHtml(analysis.report);
+        aiBlock.appendChild(aiContent);
+    } else {
+        // Pas d'analyse — afficher le bouton pour générer
+        aiBlock.appendChild(aiHeader);
+
+        const aiPlaceholder = document.createElement('div');
+        aiPlaceholder.className = 'ai-analysis-placeholder';
+
+        const desc = document.createElement('p');
+        desc.textContent = 'L\'analyse de sécurité IA n\'a pas encore été générée pour ce scan.';
+        aiPlaceholder.appendChild(desc);
+
+        const btn = document.createElement('button');
+        btn.className = 'btn-ai-generate';
+        btn.innerHTML = '<i class="ph ph-brain"></i> Générer l\'analyse IA';
+        btn.addEventListener('click', () => generateAiAnalysis(scanId, aiBlock));
+        aiPlaceholder.appendChild(btn);
+
+        aiBlock.appendChild(aiPlaceholder);
+    }
+
+    container.appendChild(aiBlock);
+}
+
+async function generateAiAnalysis(scanId, aiBlock) {
+    // Remplacer le contenu par un loader
+    const placeholder = aiBlock.querySelector('.ai-analysis-placeholder');
+    if (placeholder) {
+        placeholder.innerHTML = '<div class="ai-loading"><i class="ph ph-spinner-gap spin"></i> Génération de l\'analyse en cours... (30-60s)</div>';
+    }
+
+    try {
+        const res = await fetch(`${API}/${scanId}/analysis`);
+        const result = await res.json();
+
+        if (res.ok && result.status === 'success' && result.data) {
+            const analysis = result.data;
+
+            // Mettre à jour le header avec les métadonnées
+            const header = aiBlock.querySelector('.ai-analysis-header');
+            const existingMeta = header.querySelector('.ai-analysis-meta');
+            if (existingMeta) existingMeta.remove();
+            const metaSpan = document.createElement('span');
+            metaSpan.className = 'ai-analysis-meta';
+            metaSpan.textContent = `${analysis.provider}/${analysis.model} — ${analysis.duration}s`;
+            header.appendChild(metaSpan);
+
+            // Remplacer le placeholder par le contenu
+            if (placeholder) placeholder.remove();
+            const aiContent = document.createElement('div');
+            aiContent.className = 'ai-analysis-content';
+            aiContent.innerHTML = markdownToHtml(analysis.report);
+            aiBlock.appendChild(aiContent);
+        } else {
+            const errMsg = result.detail || 'Erreur inconnue';
+            if (placeholder) {
+                placeholder.innerHTML = `<div class="ai-error"><i class="ph ph-warning"></i> ${errMsg}</div>`;
+            }
+        }
+    } catch (err) {
+        if (placeholder) {
+            placeholder.innerHTML = '<div class="ai-error"><i class="ph ph-warning"></i> Erreur de connexion au serveur</div>';
+        }
+    }
+}
+
 function renderModalContent(data) {
     const dur = data.summary?.total_duration
         ? ` (Durée : ${data.summary.total_duration}s)`
@@ -303,6 +460,9 @@ function renderModalContent(data) {
     }
 
     modalBody.replaceChildren();
+
+    // ── AI Analysis (en haut du rapport) ──
+    renderAiAnalysis(data, modalBody);
 
     data.subdomains.forEach(sd => {
         // ── Collecter tous les ports de toutes les IPs
@@ -334,7 +494,7 @@ function renderModalContent(data) {
         h4.appendChild(icon);
         h4.appendChild(document.createTextNode(' ' + sd.subdomain));
 
-        // Badge ORIGIN_SERVER (entrées leaked-origin découvertes via headers HTTP)
+        // Badge ORIGIN_SERVER
         if (sd.tags && sd.tags.includes('ORIGIN_SERVER')) {
             const originBadge = document.createElement('span');
             originBadge.className = 'badge-origin';
@@ -448,7 +608,6 @@ function renderModalContent(data) {
                 const webBlock = document.createElement('div');
                 webBlock.className = 'web-block';
 
-                // Web block header
                 const wbHeader = document.createElement('div');
                 wbHeader.className = 'web-block-header';
 
@@ -475,11 +634,10 @@ function renderModalContent(data) {
 
                 webBlock.appendChild(wbHeader);
 
-                // Web block body
                 const wbBody = document.createElement('div');
                 wbBody.className = 'web-block-body';
 
-                // Technologies (enrichies avec technology_details)
+                // Technologies
                 const techRow = document.createElement('div');
                 techRow.className = 'info-row';
                 const techLabel = document.createElement('span');
@@ -515,7 +673,6 @@ function renderModalContent(data) {
                         techTags.appendChild(tag);
                     });
                 } else if (sw.technologies && sw.technologies.length) {
-                    // Fallback si technology_details absent (anciens scans)
                     sw.technologies.forEach(t => {
                         const tag = document.createElement('span');
                         tag.className = 'tag-tech';
@@ -531,7 +688,7 @@ function renderModalContent(data) {
                 techRow.appendChild(techTags);
                 wbBody.appendChild(techRow);
 
-                // Leaked Origin IPs (IPs réelles derrière Cloudflare découvertes via headers)
+                // Leaked Origin IPs
                 if (sw.leaked_origin_ips && sw.leaked_origin_ips.length) {
                     const leakRow = document.createElement('div');
                     leakRow.className = 'info-row';
@@ -600,7 +757,7 @@ function renderModalContent(data) {
         modalBody.appendChild(card);
     });
 
-    // ── CPE Matches (section globale en bas du rapport)
+    // ── CPE Matches
     const cpeMatches = data.cpe_matches || [];
     if (cpeMatches.length) {
         const cpeBlock = document.createElement('div');
