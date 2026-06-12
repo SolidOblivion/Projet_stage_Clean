@@ -81,6 +81,7 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
         "Détection des technologies",
         "Découverte des endpoints",
         "Assemblage et sauvegarde",
+        "Analyse de sécurité IA",
     ]
 
     progress = active_scans[task_id]
@@ -255,6 +256,39 @@ def run_scan_with_progress(task_id, domaine, mode="quick"):
             f"[PERF][pipeline] step=assemble_save duree={progress['step_duration']}s "
             f"total={duree_totale}s"
         )
+
+        # Étape 8 : Analyse IA
+        progress["current_step"] = 8
+        progress["step_name"] = steps[7]
+        progress["details"] = "Génération du rapport d'analyse..."
+        debut = t.time()
+        try:
+            from modules.ai_analyst import generer_analyse_ia
+
+            analyse = generer_analyse_ia(resultat_final)
+            if analyse:
+                resultat_final["ai_analysis"] = analyse
+                progress["details"] = f"Rapport généré en {analyse.get('duration', '?')}s"
+                # Mettre à jour le document MongoDB avec l'analyse
+                try:
+                    from database.mongo_client import collection
+                    if collection is not None:
+                        collection.update_one(
+                            {"scan_id": resultat_final.get("scan_id")},
+                            {"$set": {"ai_analysis": analyse}},
+                        )
+                except Exception:
+                    pass
+            else:
+                progress["details"] = "Analyse IA ignorée (pas de clé API)"
+        except Exception as e_ai:
+            progress["details"] = f"Erreur IA non bloquante : {e_ai}"
+            print(f"[pipeline] Erreur analyse IA : {e_ai}")
+        progress["step_duration"] = round(t.time() - debut, 1)
+        print(
+            f"[PERF][pipeline] step=ai_analysis duree={progress['step_duration']}s"
+        )
+
         progress["status"] = "done"
         progress["total_duration"] = duree_totale
         progress["scan_id"] = resultat_final.get("scan_id")
@@ -342,6 +376,48 @@ def get_scan(scan_id: str):
     if not scan:
         raise HTTPException(status_code=404, detail=f"Scan {scan_id} introuvable.")
     return {"status": "success", "data": scan}
+
+
+@app.get("/api/scans/{scan_id}/analysis")
+def get_or_generate_analysis(scan_id: str):
+    """
+    Récupère l'analyse IA d'un scan existant.
+    Si l'analyse n'existe pas encore, la génère à la volée.
+    """
+    from database.mongo_client import collection
+
+    scan = trouver_scan(scan_id)
+    if not scan:
+        raise HTTPException(status_code=404, detail=f"Scan {scan_id} introuvable.")
+
+    # Si l'analyse existe déjà, la retourner
+    if scan.get("ai_analysis") and not scan["ai_analysis"].get("error"):
+        return {"status": "success", "data": scan["ai_analysis"]}
+
+    # Sinon, générer à la volée
+    try:
+        from modules.ai_analyst import generer_analyse_ia
+
+        analyse = generer_analyse_ia(scan)
+        if analyse is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Analyse IA non disponible (AI_API_KEY non configurée).",
+            )
+
+        # Sauvegarder en base pour ne pas regénérer
+        if collection is not None:
+            collection.update_one(
+                {"scan_id": scan_id},
+                {"$set": {"ai_analysis": analyse}},
+            )
+
+        return {"status": "success", "data": analyse}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur analyse IA : {e}")
 
 
 @app.delete("/api/scans/{scan_id}")

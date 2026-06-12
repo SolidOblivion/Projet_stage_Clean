@@ -182,6 +182,26 @@ def lancer_scan(domaine):
     resultat_final["summary"]["total_duration"] = round(duree_totale, 1)
 
     print("\n" + "-" * 70)
+    print("  ETAPE 8/8 : Analyse de sécurité IA")
+    print("-" * 70)
+
+    debut = time.time()
+    try:
+        from modules.ai_analyst import generer_analyse_ia
+
+        analyse = generer_analyse_ia(resultat_final)
+        if analyse:
+            resultat_final["ai_analysis"] = analyse
+            print(f"\nAnalyse IA générée en {analyse.get('duration', '?')}s")
+        else:
+            print("\nAnalyse IA ignorée (pas de clé API configurée)")
+    except Exception as e:
+        print(f"\nErreur analyse IA non bloquante : {e}")
+
+    duree = time.time() - debut
+    print(f"\nEtape 8 terminée en {duree:.1f}s")
+
+    print("\n" + "-" * 70)
     print("  SAUVEGARDE : MongoDB")
     print("-" * 70)
 
