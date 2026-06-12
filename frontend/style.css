@@ -25,6 +25,35 @@
 }
 
 *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+/* ── AI report tables ── */
+.ai-table {
+    width:100%;
+    border-collapse:collapse;
+    margin:14px 0;
+    font-size:13px;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:var(--radius-sm);
+    overflow:hidden;
+}
+.ai-table thead th {
+    background:var(--accent-soft);
+    color:var(--accent2);
+    font-weight:600;
+    text-align:left;
+    padding:9px 12px;
+    border-bottom:1px solid var(--border);
+    white-space:nowrap;
+}
+.ai-table tbody td {
+    padding:8px 12px;
+    border-bottom:1px solid var(--border);
+    color:var(--text);
+    vertical-align:top;
+}
+.ai-table tbody tr:last-child td { border-bottom:none; }
+.ai-table tbody tr:nth-child(even) { background:var(--bg); }
 body {
     font-family: 'Inter', system-ui, sans-serif;
     background: var(--bg);

@@ -291,6 +291,43 @@ async function openModal(id) {
     }
 }
 
+// ── Markdown table → HTML table ──
+function tablesToHtml(md) {
+    const lines = md.split('\n');
+    const out = [];
+    let i = 0;
+
+    const isRow = (l) => /^\s*\|.*\|\s*$/.test(l);
+    const isSeparator = (l) => /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(l);
+    const cells = (l) => l.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim());
+
+    while (i < lines.length) {
+        if (isRow(lines[i]) && i + 1 < lines.length && isSeparator(lines[i + 1])) {
+            const header = cells(lines[i]);
+            i += 2;
+            const bodyRows = [];
+            while (i < lines.length && isRow(lines[i])) {
+                bodyRows.push(cells(lines[i]));
+                i++;
+            }
+            let t = '<table class="ai-table"><thead><tr>';
+            header.forEach(h => { t += '<th>' + h + '</th>'; });
+            t += '</tr></thead><tbody>';
+            bodyRows.forEach(r => {
+                t += '<tr>';
+                header.forEach((_, idx) => { t += '<td>' + (r[idx] || '') + '</td>'; });
+                t += '</tr>';
+            });
+            t += '</tbody></table>';
+            out.push(t);
+        } else {
+            out.push(lines[i]);
+            i++;
+        }
+    }
+    return out.join('\n');
+}
+
 // ── Lightweight Markdown → HTML ──
 function markdownToHtml(md) {
     if (!md) return '';
@@ -298,7 +335,12 @@ function markdownToHtml(md) {
         // Escape HTML entities first
         .replace(/&/g, '&amp;')
         .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
+        .replace(/>/g, '&gt;');
+
+    // Tables (must run before line-based transforms, on escaped text)
+    html = tablesToHtml(html);
+
+    html = html
         // Code blocks (``` ... ```)
         .replace(/```([\s\S]*?)```/g, '<pre class="ai-code">$1</pre>')
         // Inline code
@@ -339,7 +381,17 @@ function markdownToHtml(md) {
         return '<ol class="ai-list">' + match.replace(/<br>/g, '').replace(/ class="ai-ol"/g, '') + '</ol>';
     });
 
-    return '<p>' + html + '</p>';
+    html = '<p>' + html + '</p>';
+
+    // Cleanup: tables/blocks must not be wrapped in <p> or surrounded by <br>
+    html = html
+        .replace(/<p>\s*(<table)/g, '$1')
+        .replace(/(<\/table>)\s*<\/p>/g, '$1')
+        .replace(/(<br>)*\s*(<table)/g, '$2')
+        .replace(/(<\/table>)\s*(<br>)*/g, '$1')
+        .replace(/<p>\s*<\/p>/g, '');
+
+    return html;
 }
 
 // ── AI Analysis Section ──
