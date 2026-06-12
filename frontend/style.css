@@ -457,6 +457,7 @@ body {
     border-radius:var(--radius);
     overflow:hidden;
     background:var(--surface);
+    flex-shrink:0; /* Empêche l'écrasement par le flex du .modal-body (rapport long) */
 }
 .ai-analysis-header {
     background:linear-gradient(135deg, var(--accent-soft), #f0e6ff);
@@ -476,7 +477,7 @@ body {
 .ai-analysis-content {
     padding:20px 24px;
     font-size:13px; line-height:1.7; color:var(--text);
-    max-height:600px; overflow-y:auto;
+    min-height:120px; max-height:600px; overflow-y:auto;
 }
 .ai-analysis-content p { margin-bottom:8px; }
 .ai-analysis-content p:empty { display:none; }
