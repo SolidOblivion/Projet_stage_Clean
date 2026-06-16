@@ -10,6 +10,10 @@ __pycache__/
 *$py.class
 
 
+# Environment variables — NE JAMAIS COMMITTER
+.env
+.env.*
+
 # Logs
 *.log
 
