@@ -2,12 +2,36 @@
 
 Ce projet est un outil de découverte et de scan (Attack Surface Management). 
 
-## Prérequis
+## Lancement avec Docker (Recommandé)
+
+Le projet est entièrement conteneurisé. En utilisant Docker Compose, vous n'avez plus besoin d'installer ou de lancer MongoDB manuellement sur votre machine.
+
+### Prérequis
+*   Docker et Docker Compose installés sur votre système.
+
+### Démarrage
+1.  Assurez-vous d'avoir configuré votre fichier `.env` à la racine du projet.
+2.  Lancez la commande suivante à la racine :
+    ```bash
+    docker compose up --build
+    ```
+
+Cette commande va démarrer automatiquement :
+*   Le conteneur MongoDB (`asm_mongodb`) avec persistance des données.
+*   Le conteneur de l'application (`asm_app`) hébergeant l'API FastAPI sur le port `8000`.
+
+L'API et l'interface Web du projet seront accessibles à l'adresse : [http://localhost:8000](http://localhost:8000).
+
+---
+
+## Lancement Local (Sans Docker)
+
+### Prérequis
 
 - Python 3.x
-- MongoDB 7.0 (installé sans service)
+- MongoDB (installé localement)
 
-## Démarrage de la base de données
+### Démarrage de la base de données
 
 Étant donné que MongoDB n'est pas configuré en tant que service Windows, **vous devez le démarrer manuellement avant d'exécuter le pipeline**. 
 
@@ -22,15 +46,22 @@ Ce script va :
 2. Créer les dossiers de données (`C:\data\db`) s'ils n'existent pas.
 3. Lancer `mongod.exe` en arrière-plan.
 
-## Lancement du Pipeline
+### Lancement du Pipeline ou de l'API
 
-Une fois la base de données démarrée, vous pouvez lancer un scan :
+Une fois la base de données démarrée :
 
-```bash
-python -m pipeline.runner <domaine>
-```
+*   **Pour lancer l'API et l'interface Web :**
+    ```bash
+    python -m api.main
+    ```
 
-Exemple :
-```bash
-python -m pipeline.runner example.com
-```
+*   **Pour lancer un scan en ligne de commande :**
+    ```bash
+    python -m pipeline.runner <domaine>
+    ```
+
+    Exemple :
+    ```bash
+    python -m pipeline.runner example.com
+    ```
+
